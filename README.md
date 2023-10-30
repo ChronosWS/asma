@@ -1,0 +1,3 @@
+# Ark Server Manager: Ascended
+
+This is the official repository for the Ark Server Manager: Ascended project - a tool used to configure and manage dedicated servers for the game Ark: Survival Ascended (tm) game by Studio Wildcard and Snail Games USA.  This tool is not an official Studio Wildcard tool, nor do its developers have any association with Studio Wildcard, Snail Games USA or their partners or affiliates. This product is provided free-of-charge to all users. This product is not packaged with Ark: Survival Ascended or any of its assets - these must be obtained through normal means (such as through Steam), which may require an account with various services. The tool endeavors to make this process easy and automated for the end user.
