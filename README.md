@@ -1,7 +1,13 @@
 # Ark Server Manager: Ascended
 
-**Latest Build**: *No builds available yet*
+**Latest Development Build**: [Dev Build](https://arkservermanager.s3.us-west-2.amazonaws.com/asma/release/latest-dev.zip)
+> Development builds are not recommended for use by non-developers. They may be quite broken and could lead to data corruption.
 
+**Latest Release**: *No builds available yet*
+
+**Discord**: [Server Mangers](https://discord.gg/aY6erNcXef)
+
+## Overview
 
 This is the official repository for the Ark Server Manager: Ascended project - a tool used to configure and manage dedicated servers for the game Ark: Survival Ascended (tm) game by Studio Wildcard and Snail Games USA.  This tool is not an official Studio Wildcard tool, nor do its developers have any association with Studio Wildcard, Snail Games USA or their partners or affiliates. This product is provided free-of-charge to all users. This product is not packaged with Ark: Survival Ascended or any of its assets - these must be obtained through normal means (e.g. Steam, Epic, etc.), which may require an account with various services. The tool endeavors to make this process easy and automated for the end user.
 
@@ -27,4 +33,4 @@ Personally, I just enjoy writing code in Rust compared to most other languages.
 
 ## Discussion and Participation
 
-You can get involved in discussions about development on [Discord](https://discord.gg/aY6erNcXef) as well as submit PRs to this repository.
+You can get involved in discussions about development on [Discord](https://discord.gg/aY6erNcXef) as well as submit Issues and PRs to this repository.
