@@ -1,0 +1,18 @@
+[package]
+name = "asma"
+version = "0.1.0"
+authors = ["Cliff Hudson <cliff.s.hudson@gmail.com>"]
+edition = "2021"
+build = "build.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# For .ico support
+image = { version = "0.24.0", default-features = false, features = [ "ico" ] }
+slint = "1.2.2"
+
+[build-dependencies]
+anyhow = "1.0.75"
+slint-build = "1.2.2"
+vergen = { version = "8.2.5", features = [ "build"] }

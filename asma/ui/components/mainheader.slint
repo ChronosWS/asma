@@ -1,0 +1,50 @@
+import { HorizontalBox, VerticalBox, LineEdit, Button } from "std-widgets.slint";
+export component MainHeader inherits HorizontalBox {
+    in-out property<string> version: "<not set>";
+    VerticalBox {
+        Text {
+            font-size: 20pt;
+            font-weight: 600;
+            text: "ASM: Ascended";
+        }
+        Text {
+            vertical-alignment: bottom;
+            text: "Version: \{version}";
+        }
+    }
+    VerticalBox {
+        Text {
+            horizontal-alignment: center;
+            text: "My Public IP";
+        }
+        HorizontalBox {
+            LineEdit { 
+                text: "unknown";
+            }
+            Button {
+                icon: @image-url("../../res/icons/Refresh.ico");
+            }
+        }
+        Button {
+            icon: @image-url("../../res/icons/Servers.ico");
+            text: "Server Monitor";
+        }
+    }
+    VerticalBox {
+        Text {
+            horizontal-alignment: center;
+            text: "Task Status";
+        }
+        Text {
+            text: "Auto-Backup: Unknown";
+        }
+        Text {
+            text: "Auto-Update: Unknown";
+        }
+        Text {
+            text: "Discord Bot: Disabled";
+        }
+
+    }
+
+}

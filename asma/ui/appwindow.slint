@@ -1,0 +1,109 @@
+import { Button, VerticalBox , HorizontalBox, LineEdit, TabWidget} from "std-widgets.slint";
+import { MainHeader } from "components/mainheader.slint";
+
+export struct Profile {
+    id: string,
+    name: string,
+    installed_version: string,
+    installation_location: string,
+    status: string,
+    availability: string,
+    current_players: int,
+    max_players: int
+}
+
+export component AppWindow inherits Window {
+    in-out property<string> version: "<not set>";
+    in-out property<Profile> profile;
+    title: "ASM: Ascended (Version \{version})";
+    VerticalBox {
+        MainHeader {
+            version <=> version;
+        }
+        TabWidget { 
+            Tab {
+                in-out property profile <=> root.profile;
+                title: "<not set>";
+                VerticalBox { 
+                    HorizontalBox {
+                        Text {
+                            text: "Profile ID: \{profile.id}";
+                        }
+                    }
+                    HorizontalBox {
+                        Text {
+                            text: "Profile:";
+                        }
+                        LineEdit {
+                            text: profile.name;
+                        }
+                        Button {
+                            icon: @image-url("../res/icons/FolderImport.ico");
+                            text: "Import";
+                        }
+                        Button {
+                            icon: @image-url("../res/icons/Save.ico");
+                            text: "Save";
+                        }
+                    }
+                    HorizontalBox {
+                        Text {
+                            vertical-alignment: center;
+                            text: "Installed Version: \{profile.installed_version}";
+                        }
+                        
+                        Button {
+                            width: 44px;
+                            icon: @image-url("../res/icons/Website.ico");
+                        }
+                        Button {
+                            width: 44px;
+                            icon: @image-url("../res/icons/Validate.ico");
+                        }
+                        Button {
+                            width: 44px;
+                            icon: @image-url("../res/icons/Logs.ico");
+                        }
+                        Button {
+                            icon: @image-url("../res/icons/Download.ico");
+                            text: "Install";
+                        }
+                        
+                    }
+                    HorizontalBox {
+                        Text {
+                            vertical-alignment: center;
+                            text: "Installation Location: \{profile.installation_location}";
+                        }
+                        Button {
+                            width: 44px;
+                            icon: @image-url("../res/icons/FolderOpen.ico");
+                        }
+                        Button {
+                            text: "Set Location...";
+                        }
+                    }
+                    HorizontalBox {
+                        Text {
+                            text: "Status: \{profile.status}";
+                        }
+                        Text {
+                            text: "Availability: \{profile.availability}";
+                        }
+                        Text {
+                            text: "Players: \{profile.current_players}/\{profile.max_players}";
+                        }
+                        Button {
+                            icon: @image-url("../res/icons/Start.ico");
+                            text: "Start";
+                        }
+                        Button {
+                            icon: @image-url("../res/icons/Players.ico");
+                            text: "Players";
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
