@@ -14,11 +14,15 @@ export struct Profile {
 
 export component AppWindow inherits Window {
     in-out property<string> version: "<not set>";
+    in-out property<string> ip: "<not set>";
     in-out property<Profile> profile;
+    callback refresh_ip;
     title: "ASM: Ascended (Version \{version})";
     VerticalBox {
         MainHeader {
             version <=> version;
+            ip <=> ip;
+            refresh-ip => { refresh-ip() }
         }
         TabWidget { 
             Tab {

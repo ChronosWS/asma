@@ -10,6 +10,9 @@ build = "build.rs"
 [dependencies]
 # For .ico support
 image = { version = "0.24.0", default-features = false, features = [ "ico" ] }
+once_cell = "1.18.0"
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
 slint = "1.2.2"
 
 [build-dependencies]

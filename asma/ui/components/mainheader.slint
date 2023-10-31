@@ -1,6 +1,8 @@
 import { HorizontalBox, VerticalBox, LineEdit, Button } from "std-widgets.slint";
 export component MainHeader inherits HorizontalBox {
     in-out property<string> version: "<not set>";
+    in-out property<string> ip: "<not set>";
+    callback refresh_ip;
     VerticalBox {
         Text {
             font-size: 20pt;
@@ -19,10 +21,11 @@ export component MainHeader inherits HorizontalBox {
         }
         HorizontalBox {
             LineEdit { 
-                text: "unknown";
+                text: ip;
             }
             Button {
                 icon: @image-url("../../res/icons/Refresh.ico");
+                clicked => { refresh-ip() }
             }
         }
         Button {
