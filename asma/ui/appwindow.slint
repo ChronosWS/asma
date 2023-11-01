@@ -17,6 +17,8 @@ export component AppWindow inherits Window {
     in-out property<string> ip: "<not set>";
     in-out property<Profile> profile;
     callback refresh_ip;
+    callback profile_set_location;
+    callback profile_install;
     title: "ASM: Ascended (Version \{version})";
     VerticalBox {
         MainHeader {
@@ -71,6 +73,7 @@ export component AppWindow inherits Window {
                         Button {
                             icon: @image-url("../res/icons/Download.ico");
                             text: "Install";
+                            clicked => { profile_install() }
                         }
                         
                     }
@@ -85,6 +88,7 @@ export component AppWindow inherits Window {
                         }
                         Button {
                             text: "Set Location...";
+                            clicked => { profile_set_location() }
                         }
                     }
                     HorizontalBox {
