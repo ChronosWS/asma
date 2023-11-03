@@ -1,117 +1,47 @@
-import { Button, VerticalBox , HorizontalBox, LineEdit, TabWidget} from "std-widgets.slint";
-import { MainHeader } from "components/mainheader.slint";
 
-export struct Profile {
-    id: string,
-    name: string,
-    installed_version: string,
-    installation_location: string,
-    status: string,
-    availability: string,
-    current_players: int,
-    max_players: int
-}
+
+import { Button, VerticalBox , HorizontalBox, LineEdit, ListView , TabWidget} from "std-widgets.slint";
+import { MainHeader } from "components/mainheader.slint";
+import { ServerProfile} from "models/server_profile.slint"; 
+import { ServerState } from "models/server_state.slint";
+import { ServerCard } from "components/server_card.slint";
+import { GlobalSettings } from "windows/global_settings.slint";
+import { GlobalConfiguration } from "models/global_configuration.slint";
+
+export { GlobalConfiguration }
 
 export component AppWindow inherits Window {
-    in-out property<string> version: "<not set>";
-    in-out property<string> ip: "<not set>";
-    in-out property<Profile> profile;
-    callback refresh_ip;
-    callback profile_set_location;
-    callback profile_install;
-    title: "ASM: Ascended (Version \{version})";
+    in-out property<[ServerProfile]> server_profiles;
+    callback set_steamcmd_location;
+    callback set_profiles_location;
+    callback update_steamcmd;
+    title: "ASM: Ascended (Version \{GlobalConfiguration.version})";
+    width: 1024px;
     VerticalBox {
         MainHeader {
-            version <=> version;
-            ip <=> ip;
-            refresh-ip => { refresh-ip() }
+            version: GlobalConfiguration.version;
+            ip: GlobalConfiguration.local_ip;
         }
         TabWidget { 
             Tab {
-                in-out property profile <=> root.profile;
-                title: "<not set>";
-                VerticalBox { 
-                    HorizontalBox {
-                        Text {
-                            text: "Profile ID: \{profile.id}";
-                        }
+                title: "Global Settings";
+                GlobalSettings {
+                    set-steamcmd-location => { set-steamcmd-location() }
+                    set-profiles-location => { set-profiles-location() }
+                    update-steamcmd => { update-steamcmd() }
+                }   
+            }
+            Tab {
+                title: "Servers";
+                ListView {
+                    width: 100%;
+                    height: 100%;
+                    for profile in server_profiles : ServerCard {
+                        profile: profile;
                     }
-                    HorizontalBox {
-                        Text {
-                            text: "Profile:";
-                        }
-                        LineEdit {
-                            text: profile.name;
-                        }
-                        Button {
-                            icon: @image-url("../res/icons/FolderImport.ico");
-                            text: "Import";
-                        }
-                        Button {
-                            icon: @image-url("../res/icons/Save.ico");
-                            text: "Save";
-                        }
-                    }
-                    HorizontalBox {
-                        Text {
-                            vertical-alignment: center;
-                            text: "Installed Version: \{profile.installed_version}";
-                        }
-                        
-                        Button {
-                            width: 44px;
-                            icon: @image-url("../res/icons/Website.ico");
-                        }
-                        Button {
-                            width: 44px;
-                            icon: @image-url("../res/icons/Validate.ico");
-                        }
-                        Button {
-                            width: 44px;
-                            icon: @image-url("../res/icons/Logs.ico");
-                        }
-                        Button {
-                            icon: @image-url("../res/icons/Download.ico");
-                            text: "Install";
-                            clicked => { profile_install() }
-                        }
-                        
-                    }
-                    HorizontalBox {
-                        Text {
-                            vertical-alignment: center;
-                            text: "Installation Location: \{profile.installation_location}";
-                        }
-                        Button {
-                            width: 44px;
-                            icon: @image-url("../res/icons/FolderOpen.ico");
-                        }
-                        Button {
-                            text: "Set Location...";
-                            clicked => { profile_set_location() }
-                        }
-                    }
-                    HorizontalBox {
-                        Text {
-                            text: "Status: \{profile.status}";
-                        }
-                        Text {
-                            text: "Availability: \{profile.availability}";
-                        }
-                        Text {
-                            text: "Players: \{profile.current_players}/\{profile.max_players}";
-                        }
-                        Button {
-                            icon: @image-url("../res/icons/Start.ico");
-                            text: "Start";
-                        }
-                        Button {
-                            icon: @image-url("../res/icons/Players.ico");
-                            text: "Players";
-                        }
-                    }
+                    visible: false;
                 }
             }
-        }
+         } 
     }
 }

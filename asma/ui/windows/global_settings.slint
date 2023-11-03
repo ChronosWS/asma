@@ -1,0 +1,52 @@
+import { VerticalBox , HorizontalBox, Button} from "std-widgets.slint";
+import { GlobalConfiguration } from "../models/global_configuration.slint";
+
+export component GlobalSettings inherits VerticalBox {
+    callback open_steamcmd;
+    callback update_steamcmd;
+    callback set_steamcmd_location;
+
+    callback open_profiles;
+    callback set_profiles_location;
+
+    width: 768px;
+    HorizontalBox { 
+        Text {
+            vertical-alignment: center;
+            text: "SteamCMD: \{GlobalConfiguration.steamcmd_directory}";
+        }
+        Button  {
+            text: "Open";
+            icon: @image-url("../../res/icons/FolderOpen.ico");
+            clicked => { open_steamcmd() }
+            enabled: false;
+        }
+        Button  {
+            text: "Update";
+            icon: @image-url("../../res/icons/Refresh.ico");
+            clicked => { update_steamcmd() }
+        }
+        Button  {
+            text: "Set Location...";
+            icon: @image-url("../../res/icons/FolderOpen.ico");
+            clicked => { set_steamcmd_location() }
+        }
+    }
+    HorizontalBox { 
+        Text {
+            vertical-alignment: center;
+            text: "Profiles: \{GlobalConfiguration.profiles_directory}";
+        }
+        Button  {
+            text: "Open";
+            icon: @image-url("../../res/icons/FolderOpen.ico");
+            clicked => { open_profiles() }
+        }
+        Button  {
+            text: "Set Location...";
+            icon: @image-url("../../res/icons/FolderOpen.ico");
+            enabled: false;
+            clicked => { set_profiles_location() }
+        }
+    }
+}

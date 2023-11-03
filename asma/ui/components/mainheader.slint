@@ -2,49 +2,52 @@ import { HorizontalBox, VerticalBox, LineEdit, Button } from "std-widgets.slint"
 export component MainHeader inherits HorizontalBox {
     in-out property<string> version: "<not set>";
     in-out property<string> ip: "<not set>";
-    callback refresh_ip;
+    callback open_global_settings;
     VerticalBox {
+        padding: 0;
         Text {
+            horizontal-alignment: center;
             font-size: 20pt;
             font-weight: 600;
             text: "ASM: Ascended";
         }
-        Text {
-            vertical-alignment: bottom;
-            text: "Version: \{version}";
+        Button {
+            horizontal-stretch: 0;
+            text: "Global Settings";
+            icon: @image-url("../../res/icons/Settings.ico");
+            clicked => { open_global_settings() }
         }
     }
     VerticalBox {
+        padding: 0;
         Text {
             horizontal-alignment: center;
             text: "My Public IP";
         }
         HorizontalBox {
-            LineEdit { 
+            Text { 
+                vertical-alignment: center;
+                horizontal-alignment: center;
                 text: ip;
             }
-            Button {
-                icon: @image-url("../../res/icons/Refresh.ico");
-                clicked => { refresh-ip() }
-            }
-        }
-        Button {
-            icon: @image-url("../../res/icons/Servers.ico");
-            text: "Server Monitor";
         }
     }
     VerticalBox {
+        padding: 0;
         Text {
             horizontal-alignment: center;
             text: "Task Status";
         }
         Text {
+            horizontal-alignment: center;
             text: "Auto-Backup: Unknown";
         }
         Text {
+            horizontal-alignment: center;
             text: "Auto-Update: Unknown";
         }
         Text {
+            horizontal-alignment: center;
             text: "Discord Bot: Disabled";
         }
 

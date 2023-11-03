@@ -5,6 +5,8 @@
 
 **Latest Release**: *No builds available yet*
 
+**Changelog**: [Changelog](https://github.com/ChronosWS/asma/tree/master/asma/CHANGELOG.md)
+
 **Discord**: [Server Mangers](https://discord.gg/aY6erNcXef)
 
 ## Overview
@@ -34,3 +36,14 @@ Personally, I just enjoy writing code in Rust compared to most other languages.
 ## Discussion and Participation
 
 You can get involved in discussions about development on [Discord](https://discord.gg/aY6erNcXef) as well as submit Issues and PRs to this repository.
+
+### Translations
+
+If you are a native speaker of a language other than English and wish to assist in translations, I welcome your support. Translations will be handled with `.po` and `.pot` files, which are used by the [gettext](https://www.gnu.org/software/gettext/) tool.  There are editors available for these files, such as:
+
+* [poedit](https://poedit.net/)
+* [OmegaT](https://omegat.org/)
+* [Lokalize](https://userbase.kde.org/Lokalize)
+* [Transifex](https://www.transifex.com/)
+
+I do not quite have the infrastructure set up for this yet, but if you wish to help, keep an eye out for updates here, or ask in the Discord.

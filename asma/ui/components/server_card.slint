@@ -1,0 +1,38 @@
+import { ServerProfile } from "../models/server_profile.slint";
+import { VerticalBox , HorizontalBox, Button} from "std-widgets.slint";
+
+export component ServerCard {
+    in-out property<ServerProfile> profile;
+    VerticalBox { 
+        HorizontalBox {
+            padding: 0;
+            Text {
+                vertical-alignment: center;
+                text: "Server: <unknown>";
+            }
+            Text {
+                vertical-alignment: center;
+                text: "Profile: \{profile.name}";
+            }
+        }
+        HorizontalBox {
+            padding: 0;
+            Text {
+                vertical-alignment: center;
+                text: "Install: \{profile.settings.installation_location}";
+            }
+            Text {
+                vertical-alignment: center;
+                text: "Version: \{profile.state.installed-version}";
+            }
+            Button { 
+                text: "Install";
+                icon: @image-url("../../res/icons/Download.ico");
+            }
+            Button { 
+                text: "Start";
+                icon: @image-url("../../res/icons/Start.ico");
+            }
+        }
+    }
+}
