@@ -3,35 +3,51 @@ import { VerticalBox , HorizontalBox, Button} from "std-widgets.slint";
 
 export component ServerCard {
     in-out property<ServerProfile> profile;
-    VerticalBox { 
-        HorizontalBox {
-            padding: 0;
-            Text {
-                vertical-alignment: center;
-                text: "Server: <unknown>";
+    callback edit_profile(string);
+    Rectangle {
+        border-color: darkgray;
+        border-width: 1px;
+        border-radius: 5px;
+        VerticalBox { 
+            HorizontalBox {
+                padding: 0;
+                Text {
+                    vertical-alignment: center;
+                    text: "Server: <unknown>";
+                }
+                Text {
+                    vertical-alignment: center;
+                    text: "Profile: \{profile.name}";
+                }
+                Button { 
+                    width: 100px;
+                    text: "Edit";
+                    icon: @image-url("../../res/icons/Edit.ico");
+                    clicked => { edit-profile(profile.id) }
+                }
             }
-            Text {
-                vertical-alignment: center;
-                text: "Profile: \{profile.name}";
-            }
-        }
-        HorizontalBox {
-            padding: 0;
-            Text {
-                vertical-alignment: center;
-                text: "Install: \{profile.settings.installation_location}";
-            }
-            Text {
-                vertical-alignment: center;
-                text: "Version: \{profile.state.installed-version}";
-            }
-            Button { 
-                text: "Install";
-                icon: @image-url("../../res/icons/Download.ico");
-            }
-            Button { 
-                text: "Start";
-                icon: @image-url("../../res/icons/Start.ico");
+            HorizontalBox {
+                padding: 0;
+                Text {
+                    vertical-alignment: center;
+                    text: "Install: \{profile.settings.installation_location}";
+                }
+                Text {
+                    vertical-alignment: center;
+                    text: "Version: \{profile.state.installed-version}";
+                }
+                Button { 
+                    width: 100px;
+                    text: "Install";
+                    icon: @image-url("../../res/icons/Download.ico");
+                    enabled: false;
+                }
+                Button {
+                    width: 100px; 
+                    text: "Start";
+                    icon: @image-url("../../res/icons/Start.ico");
+                    enabled: false;
+                }
             }
         }
     }

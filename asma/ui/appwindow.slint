@@ -12,34 +12,59 @@ export { GlobalConfiguration }
 
 export component AppWindow inherits Window {
     in-out property<[ServerProfile]> server_profiles;
+    in-out property<ServerProfile> current_edit_profile;
     callback set_steamcmd_location;
     callback set_profiles_location;
+    callback open_steamcmd;
     callback update_steamcmd;
+    callback open_profiles;
+    callback add_profile;
+    callback remove_profiles;
+    callback edit_profile(string);
     title: "ASM: Ascended (Version \{GlobalConfiguration.version})";
-    width: 1024px;
+    min-width: 1024px;
+    min-height: 768px;
     VerticalBox {
         MainHeader {
             version: GlobalConfiguration.version;
             ip: GlobalConfiguration.local_ip;
         }
         TabWidget { 
+
             Tab {
                 title: "Global Settings";
                 GlobalSettings {
                     set-steamcmd-location => { set-steamcmd-location() }
                     set-profiles-location => { set-profiles-location() }
+                    open-steamcmd => { open-steamcmd() }
                     update-steamcmd => { update-steamcmd() }
+                    open-profiles => { open-profiles() }
                 }   
             }
             Tab {
                 title: "Servers";
-                ListView {
-                    width: 100%;
-                    height: 100%;
-                    for profile in server_profiles : ServerCard {
-                        profile: profile;
+                VerticalLayout {
+                    HorizontalLayout {
+                        height: 24px;
+                        Button {
+                            width: 44px;
+                            icon: @image-url("../res/icons/Add.ico");
+                            clicked => { add_profile() }
+                        }
+                        Button {
+                            width: 44px;
+                            icon: @image-url("../res/icons/Delete.ico");
+                            clicked => { remove_profiles() }
+                        }
                     }
-                    visible: false;
+                    ListView {
+                        width: 100%;
+                        height: 100%;
+                        for profile in server_profiles : ServerCard {
+                            profile: profile;
+                            edit-profile(id) => { edit-profile(id) }
+                        }
+                    }
                 }
             }
          } 

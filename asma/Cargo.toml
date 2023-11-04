@@ -20,7 +20,7 @@ futures-util = "0.3.29"
 reqwest = { version = "0.11", features = ["json", "stream" ] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1.40"
-tracing-subscriber = "0.3.17"
+tracing-subscriber = { version = "0.3.17", features = [ "env-filter"] }
 slint = "1.2.2"
 zip = "0.6.6"
 

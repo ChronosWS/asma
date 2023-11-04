@@ -1,11 +1,12 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, process::Command, rc::Rc, sync::Arc};
 
 use network_utils::refresh_ip;
 use once_cell::sync::Lazy;
+use slint::{Model, ModelRc, VecModel};
 use steamcmd_utils::get_steamcmd;
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info, trace, Level};
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 use uuid::Uuid;
 
 slint::include_modules!();
@@ -84,23 +85,9 @@ fn main() -> Result<(), slint::PlatformError> {
                 .into(),
         );
 
-    app_window.set_server_profiles(
-        [ServerProfile {
-            id: Uuid::new_v4().to_string().into(),
-            name: "Test Profile".into(),
-            settings: ServerSettings {
-                installation_location: "".into(),
-            },
-            state: ServerState {
-                availability: "Unavailable".into(),
-                current_players: 0,
-                installed_version: "0.0".into(),
-                max_players: 70,
-                status: "Not Installed".into(),
-            },
-        }]
-        .into(),
-    );
+    let server_profiles: Rc<VecModel<ServerProfile>> = Rc::new(VecModel::default());
+    let server_profiles_model = ModelRc::from(server_profiles);
+    app_window.set_server_profiles(server_profiles_model);
 
     // slint::slint! {
     //     import { GlobalSettings } from "ui/windows/global_settings.slint";
@@ -120,7 +107,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // let global_settings_window =
     //     GlobalSettingsWindow::new().expect("Failed to create GlobalSettingsWindow");
 
-    // OnSetSteamCmdLocation
+    // on_set_steamcmd_location
     app_window.on_set_steamcmd_location({
         let app_window_weak = app_window.as_weak();
         move || {
@@ -152,12 +139,16 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    // OnUpdateSteamCmd
+    // on_update_steamcmd
     {
         let app_window_weak = app_window.as_weak();
         app_window.on_update_steamcmd(move || {
             let app_window_weak = app_window_weak.clone();
-            let destination_path = app_window_weak.unwrap().global::<GlobalConfiguration>().get_steamcmd_directory().to_string();
+            let destination_path = app_window_weak
+                .unwrap()
+                .global::<GlobalConfiguration>()
+                .get_steamcmd_directory()
+                .to_string();
             ASYNC_RUNTIME.spawn(async move {
                 if let Err(error) = get_steamcmd(destination_path).await {
                     error!("Failed to get steamcmd: {}", error);
@@ -167,6 +158,71 @@ fn main() -> Result<(), slint::PlatformError> {
             });
         });
     }
+
+    app_window.on_open_steamcmd({
+        let app_window_weak = app_window.as_weak();
+        move || {
+            let steamcmd_location = app_window_weak
+                .unwrap()
+                .global::<GlobalConfiguration>()
+                .get_steamcmd_directory();
+            if let Err(e) = Command::new("explorer")
+                .args([steamcmd_location.as_str()])
+                .spawn()
+            {
+                error!(
+                    "Failed to open {}: {}",
+                    steamcmd_location.as_str(),
+                    e.to_string()
+                );
+            }
+        }
+    });
+
+    app_window.on_open_profiles({
+        let app_window_weak = app_window.as_weak();
+        move || {
+            let profiles_location = app_window_weak
+                .unwrap()
+                .global::<GlobalConfiguration>()
+                .get_profiles_directory();
+            if let Err(e) = Command::new("explorer")
+                .args([profiles_location.as_str()])
+                .spawn()
+            {
+                error!(
+                    "Failed to open {}: {}",
+                    profiles_location.as_str(),
+                    e.to_string()
+                );
+            }
+        }
+    });
+
+    app_window.on_add_profile({
+        let app_window_weak = app_window.as_weak();
+        move || {
+            let server_profiles_rc = app_window_weak.unwrap().get_server_profiles();
+            let server_profiles = server_profiles_rc
+                .as_any()
+                .downcast_ref::<VecModel<ServerProfile>>()
+                .expect("ServerProfiles model is not a VecModel!");
+            server_profiles.push(ServerProfile {
+                id: Uuid::new_v4().to_string().into(),
+                name: "Unnamed".into(),
+                settings: ServerSettings {
+                    installation_location: "".into(),
+                },
+                state: ServerState {
+                    availability: "Unavailable".into(),
+                    current_players: 0,
+                    installed_version: "0.0".into(),
+                    max_players: 70,
+                    status: "Not Installed".into(),
+                },
+            });
+        }
+    });
 
     // Refresh our IP now
     {
@@ -297,10 +353,14 @@ fn main() -> Result<(), slint::PlatformError> {
 }
 
 fn init_tracing() {
+    let env_filter = EnvFilter::builder()
+        .parse("asma=TRACE")
+        .expect("Bad tracing filter");
     let subscriber = FmtSubscriber::builder()
         // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
         // will be written to stdout.
         .with_max_level(Level::TRACE)
+        .with_env_filter(env_filter)
         // completes the builder.
         .finish();
 
