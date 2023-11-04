@@ -86,7 +86,7 @@ fn main() -> Result<(), slint::PlatformError> {
         );
 
     let server_profiles: Rc<VecModel<ServerProfile>> = Rc::new(VecModel::default());
-    let server_profiles_model = ModelRc::from(server_profiles);
+    let server_profiles_model = ModelRc::from(server_profiles.clone());
     app_window.set_server_profiles(server_profiles_model);
 
     // slint::slint! {
@@ -140,9 +140,9 @@ fn main() -> Result<(), slint::PlatformError> {
     });
 
     // on_update_steamcmd
-    {
+    app_window.on_update_steamcmd({
         let app_window_weak = app_window.as_weak();
-        app_window.on_update_steamcmd(move || {
+        move || {
             let app_window_weak = app_window_weak.clone();
             let destination_path = app_window_weak
                 .unwrap()
@@ -156,9 +156,10 @@ fn main() -> Result<(), slint::PlatformError> {
                 }
                 trace!("steamcmd updated");
             });
-        });
-    }
+        }
+    });
 
+    // on_open_steamcmd
     app_window.on_open_steamcmd({
         let app_window_weak = app_window.as_weak();
         move || {
@@ -179,6 +180,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
+    // on_open_profiles
     app_window.on_open_profiles({
         let app_window_weak = app_window.as_weak();
         move || {
@@ -199,9 +201,11 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
+    // on_add_profile
     app_window.on_add_profile({
         let app_window_weak = app_window.as_weak();
         move || {
+            trace!("Adding profile...");
             let server_profiles_rc = app_window_weak.unwrap().get_server_profiles();
             let server_profiles = server_profiles_rc
                 .as_any()
@@ -221,6 +225,36 @@ fn main() -> Result<(), slint::PlatformError> {
                     status: "Not Installed".into(),
                 },
             });
+            trace!("Profiles: {}", server_profiles.row_count());
+        }
+    });
+
+    // on_edit_profile
+    app_window.on_edit_profile({
+        let app_window_weak = app_window.as_weak();
+        move |profile_id| {
+            trace!("Editing profile {}", profile_id.as_str());
+            let app_window = app_window_weak.unwrap();
+            app_window.set_state(MainState::Edit);
+        }
+    });
+
+    // on_profile_edit_close
+    app_window.on_profile_edit_close({
+        let app_window_weak = app_window.as_weak();
+        move || {
+            trace!("Closing profile editor...");
+            let app_window = app_window_weak.unwrap();
+            app_window.set_state(MainState::Main);
+        }
+    });
+
+    // on_profile_edit_close
+    app_window.on_profile_edit_save({
+        let app_window_weak = app_window.as_weak();
+        move || {
+            trace!("TODO: Save profile...");
+            let app_window = app_window_weak.unwrap();
         }
     });
 

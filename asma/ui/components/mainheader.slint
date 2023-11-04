@@ -5,21 +5,18 @@ export component MainHeader inherits HorizontalBox {
     callback open_global_settings;
     VerticalBox {
         padding: 0;
+        horizontal-stretch: 0;
         Text {
-            horizontal-alignment: center;
+            preferred-width: 100px;
+            
             font-size: 20pt;
             font-weight: 600;
             text: "ASM: Ascended";
         }
-        Button {
-            horizontal-stretch: 0;
-            text: "Global Settings";
-            icon: @image-url("../../res/icons/Settings.ico");
-            clicked => { open_global_settings() }
-        }
     }
     VerticalBox {
         padding: 0;
+        horizontal-stretch: 1;
         Text {
             horizontal-alignment: center;
             text: "My Public IP";
