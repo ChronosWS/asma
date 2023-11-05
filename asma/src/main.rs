@@ -1,389 +1,445 @@
-use std::{path::PathBuf, process::Command, rc::Rc, sync::Arc};
+use std::fmt::Display;
+use std::{net::IpAddr, path::PathBuf};
 
-use network_utils::refresh_ip;
-use once_cell::sync::Lazy;
-use slint::{Model, ModelRc, VecModel};
+use iced::widget::{
+    self, button, column, container, horizontal_rule, horizontal_space, image, row, text, toggler,
+    vertical_space, Container, Row,
+};
+use iced::{
+    executor, subscription, theme, Alignment, Application, Command, Element, Event, Length, Pixels,
+    Settings, Subscription, Theme,
+};
+
 use steamcmd_utils::get_steamcmd;
-use tokio::runtime::{Builder, Runtime};
-use tracing::{error, info, trace, Level};
+use tracing::{error, info, trace, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 use uuid::Uuid;
 
-slint::include_modules!();
+mod icons;
+mod modal;
 mod network_utils;
 mod steamcmd_utils;
 
-// NOTES on async
-// See https://tokio.rs/tokio/topics/bridging
-// Set up the Tokio runtime to perform async operations on other threads.
-// NOTE: The main thread is reserved for UI operations for platform reasons.
-// See https://slint.dev/releases/1.2.2/docs/rust/slint/#threading-and-event-loop.
-// Therefore any async operations must be performed elsewhere and their values
-// returned to the main thread via something like `slint::invoke_from_event_loop`.
-static ASYNC_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {
-    Arc::new(
-        Builder::new_multi_thread()
-            .worker_threads(1)
-            .enable_all()
-            .build()
-            .unwrap(),
-    )
-});
+use modal::Modal;
 
-fn main() -> Result<(), slint::PlatformError> {
-    init_tracing();
+// iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
+// into four parts:
+// * The state
+// * The messages, which communicate user interactions or events we care about
+// * The view logic, which tells the system how to draw and maps user interactions to messages
+// * The update logic, which processes messages and updates the state
 
-    let local_app_data =
-        std::env::var("LOCALAPPDATA").expect("Failed to get LOCALAPPDATA environment variable");
+enum ThemeType {
+    Light,
+    Dark,
+}
 
-    let app_data_directory = PathBuf::from(format!("{local_app_data}\\ASMAscended"));
-    let mut default_profile_directory = app_data_directory.to_owned();
-    default_profile_directory.push("Profiles");
-    let mut default_steamcmd_directory = app_data_directory.to_owned();
-    default_steamcmd_directory.push("SteamCMD");
+struct GlobalSettings {
+    theme: ThemeType,
+    app_data_directory: String,
+    profiles_directory: String,
+    steamcmd_directory: String,
+}
 
-    std::fs::create_dir_all(default_profile_directory.clone())
-        .expect("Failed to create default profile directory");
-    std::fs::create_dir_all(default_steamcmd_directory.clone())
-        .expect("Failed to create default SteamCMD directory");
+struct ServerSettings {
+    installation_location: String,
+}
 
-    // Launch the Slint UI
-    let app_window = AppWindow::new().expect("Failed to create main application window");
+struct ServerState {
+    installed_version: String,
+    status: String,
+    availability: String,
+    current_players: u8,
+    max_players: u8,
+}
 
-    // This ui_handle can be cloned and passed around to different threads
-    let app_window_weak = app_window.as_weak();
+struct ServerProfile {
+    id: String,
+    name: String,
+    settings: ServerSettings,
+    state: ServerState,
+}
 
-    app_window
-        .global::<GlobalConfiguration>()
-        .set_version(env!("CARGO_PKG_VERSION").into());
-    app_window
-        .global::<GlobalConfiguration>()
-        .set_local_ip("<unknown>".into());
+#[derive(Debug, Clone)]
+enum LocalIp {
+    Unknown,
+    Failed,
+    Resolving,
+    Resolved(IpAddr),
+}
 
-    app_window
-        .global::<GlobalConfiguration>()
-        .set_app_data_directory(
-            app_data_directory
-                .to_str()
-                .expect("Unable to format app data directory")
-                .into(),
-        );
-    app_window
-        .global::<GlobalConfiguration>()
-        .set_profiles_directory(
-            default_profile_directory
-                .to_str()
-                .expect("Unable to format default profiles directory")
-                .into(),
-        );
-    app_window
-        .global::<GlobalConfiguration>()
-        .set_steamcmd_directory(
-            default_steamcmd_directory
-                .to_str()
-                .expect("Unable to format default steamcmd directory")
-                .into(),
-        );
+impl Display for LocalIp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LocalIp::Unknown => write!(f, "<unknown>"),
+            LocalIp::Failed => write!(f, "FAILED"),
+            LocalIp::Resolving => write!(f, "Resolving..."),
+            LocalIp::Resolved(ip_addr) => write!(f, "{}", ip_addr.to_string()),
+        }
+    }
+}
 
-    let server_profiles: Rc<VecModel<ServerProfile>> = Rc::new(VecModel::default());
-    let server_profiles_model = ModelRc::from(server_profiles.clone());
-    app_window.set_server_profiles(server_profiles_model);
+struct GlobalState {
+    app_version: String,
+    local_ip: LocalIp,
+}
 
-    // slint::slint! {
-    //     import { GlobalSettings } from "ui/windows/global_settings.slint";
+enum MainWindowMode {
+    Servers,
+    GlobalSettings,
+    EditProfile,
+}
 
-    //     export component GlobalSettingsWindow inherits Window {
-    //         callback set_steamcmd_location;
-    //         callback update_steamcmd;
+struct AppState {
+    global_settings: GlobalSettings,
+    global_state: GlobalState,
+    server_profiles: Vec<ServerProfile>,
+    mode: MainWindowMode,
+}
 
-    //         width: 768px;
-    //         GlobalSettings {
-    //             set-steamcmd-location => { set_steamcmd_location() }
-    //             update-steamcmd => { update_steamcmd() }
-    //         }
-    //     }
-    // }
+#[derive(Debug, Clone)]
+enum Message {
+    RefreshIp(LocalIp),
+    OpenGlobalSettings,
+    CloseGlobalSettings,
 
-    // let global_settings_window =
-    //     GlobalSettingsWindow::new().expect("Failed to create GlobalSettingsWindow");
+    // Theme
+    ThemeToggled(bool),
 
-    // on_set_steamcmd_location
-    app_window.on_set_steamcmd_location({
-        let app_window_weak = app_window.as_weak();
-        move || {
-            let app_window = app_window_weak.unwrap();
-            let default_path = app_window
-                .global::<GlobalConfiguration>()
-                .get_steamcmd_directory();
-            info!("Default path: {}", default_path);
-            let folder = rfd::FileDialog::new()
-                .set_title("Select SteamCMD directory")
-                .set_directory(default_path.as_str())
-                .pick_folder();
-            if let Some(folder) = folder {
-                if let Some(folder) = folder.to_str() {
-                    info!("Setting path: {}", folder);
-                    app_window
-                        .global::<GlobalConfiguration>()
-                        .set_steamcmd_directory(folder.into());
-                    let set_path = app_window
-                        .global::<GlobalConfiguration>()
-                        .get_steamcmd_directory();
-                    info!("Path after setting: {}", set_path);
+    // Profiles
+    OpenProfilesDirectory,
+    SetProfilesDirectory,
+
+    // Steam Messages
+    OpenSteamCmdDirectory,
+    UpdateSteamCmd,
+    SetSteamCmdDirectory,
+    SteamCmdUpdated,
+
+    // Keyboard and Mouse events
+    Event(Event),
+}
+
+impl Application for AppState {
+    type Executor = executor::Default;
+    type Message = Message;
+    type Theme = Theme;
+    type Flags = ();
+
+    fn new(flags: Self::Flags) -> (Self, Command<Message>) {
+        let local_app_data =
+            std::env::var("LOCALAPPDATA").expect("Failed to get LOCALAPPDATA environment variable");
+
+        let app_data_directory = PathBuf::from(format!("{local_app_data}\\ASMAscended"));
+        let mut default_profile_directory = app_data_directory.to_owned();
+        default_profile_directory.push("Profiles");
+        let mut default_steamcmd_directory = app_data_directory.to_owned();
+        default_steamcmd_directory.push("SteamCMD");
+
+        std::fs::create_dir_all(default_profile_directory.clone())
+            .expect("Failed to create default profile directory");
+        std::fs::create_dir_all(default_steamcmd_directory.clone())
+            .expect("Failed to create default SteamCMD directory");
+
+        (
+            AppState {
+                global_settings: GlobalSettings {
+                    theme: ThemeType::Dark,
+                    app_data_directory: app_data_directory.to_str().unwrap().into(),
+                    profiles_directory: default_profile_directory.to_str().unwrap().into(),
+                    steamcmd_directory: default_steamcmd_directory.to_str().unwrap().into(),
+                },
+                global_state: GlobalState {
+                    app_version: env!("CARGO_PKG_VERSION").into(),
+                    local_ip: LocalIp::Unknown,
+                },
+                server_profiles: Vec::new(),
+                mode: MainWindowMode::Servers,
+            },
+            Command::perform(network_utils::refresh_ip(), |result| {
+                if let Ok(ip_addr) = result {
+                    Message::RefreshIp(LocalIp::Resolved(ip_addr))
                 } else {
-                    error!("Failed to convert folder");
+                    Message::RefreshIp(LocalIp::Failed)
                 }
-            } else {
-                error!("No folder selected");
-            }
-        }
-    });
-
-    // on_update_steamcmd
-    app_window.on_update_steamcmd({
-        let app_window_weak = app_window.as_weak();
-        move || {
-            let app_window_weak = app_window_weak.clone();
-            let destination_path = app_window_weak
-                .unwrap()
-                .global::<GlobalConfiguration>()
-                .get_steamcmd_directory()
-                .to_string();
-            ASYNC_RUNTIME.spawn(async move {
-                if let Err(error) = get_steamcmd(destination_path).await {
-                    error!("Failed to get steamcmd: {}", error);
-                    return;
-                }
-                trace!("steamcmd updated");
-            });
-        }
-    });
-
-    // on_open_steamcmd
-    app_window.on_open_steamcmd({
-        let app_window_weak = app_window.as_weak();
-        move || {
-            let steamcmd_location = app_window_weak
-                .unwrap()
-                .global::<GlobalConfiguration>()
-                .get_steamcmd_directory();
-            if let Err(e) = Command::new("explorer")
-                .args([steamcmd_location.as_str()])
-                .spawn()
-            {
-                error!(
-                    "Failed to open {}: {}",
-                    steamcmd_location.as_str(),
-                    e.to_string()
-                );
-            }
-        }
-    });
-
-    // on_open_profiles
-    app_window.on_open_profiles({
-        let app_window_weak = app_window.as_weak();
-        move || {
-            let profiles_location = app_window_weak
-                .unwrap()
-                .global::<GlobalConfiguration>()
-                .get_profiles_directory();
-            if let Err(e) = Command::new("explorer")
-                .args([profiles_location.as_str()])
-                .spawn()
-            {
-                error!(
-                    "Failed to open {}: {}",
-                    profiles_location.as_str(),
-                    e.to_string()
-                );
-            }
-        }
-    });
-
-    // on_add_profile
-    app_window.on_add_profile({
-        let app_window_weak = app_window.as_weak();
-        move || {
-            trace!("Adding profile...");
-            let server_profiles_rc = app_window_weak.unwrap().get_server_profiles();
-            let server_profiles = server_profiles_rc
-                .as_any()
-                .downcast_ref::<VecModel<ServerProfile>>()
-                .expect("ServerProfiles model is not a VecModel!");
-            server_profiles.push(ServerProfile {
-                id: Uuid::new_v4().to_string().into(),
-                name: "Unnamed".into(),
-                settings: ServerSettings {
-                    installation_location: "".into(),
-                },
-                state: ServerState {
-                    availability: "Unavailable".into(),
-                    current_players: 0,
-                    installed_version: "0.0".into(),
-                    max_players: 70,
-                    status: "Not Installed".into(),
-                },
-            });
-            trace!("Profiles: {}", server_profiles.row_count());
-        }
-    });
-
-    // on_edit_profile
-    app_window.on_edit_profile({
-        let app_window_weak = app_window.as_weak();
-        move |profile_id| {
-            trace!("Editing profile {}", profile_id.as_str());
-            let app_window = app_window_weak.unwrap();
-            app_window.set_state(MainState::Edit);
-        }
-    });
-
-    // on_profile_edit_close
-    app_window.on_profile_edit_close({
-        let app_window_weak = app_window.as_weak();
-        move || {
-            trace!("Closing profile editor...");
-            let app_window = app_window_weak.unwrap();
-            app_window.set_state(MainState::Main);
-        }
-    });
-
-    // on_profile_edit_close
-    app_window.on_profile_edit_save({
-        let app_window_weak = app_window.as_weak();
-        move || {
-            trace!("TODO: Save profile...");
-            let app_window = app_window_weak.unwrap();
-        }
-    });
-
-    // Refresh our IP now
-    {
-        let app_window_weak = app_window_weak.clone();
-        ASYNC_RUNTIME.spawn(async move {
-            let _ = app_window_weak
-                .upgrade_in_event_loop(move |handle| {
-                    handle
-                        .global::<GlobalConfiguration>()
-                        .set_local_ip("... resolving ...".into());
-                })
-                .map_err(|e| {
-                    eprintln!(
-                        "Failed to execute callback in event loop: {}",
-                        e.to_string()
-                    )
-                });
-            let ip = refresh_ip().await;
-            if let Ok(ip) = ip {
-                app_window_weak
-                    .upgrade_in_event_loop(move |handle| {
-                        handle
-                            .global::<GlobalConfiguration>()
-                            .set_local_ip(ip.to_string().into());
-                    })
-                    .map_err(|e| {
-                        eprintln!(
-                            "Failed to execute callback in event loop: {}",
-                            e.to_string()
-                        )
-                    })
-            } else {
-                Err(())
-            }
-        });
+            }),
+        )
     }
 
-    // global_settings_window.on_update_steamcmd(move || {});
+    fn title(&self) -> String {
+        format!(
+            "Ark Server Manager: Ascended (Version {})",
+            self.global_state.app_version
+        )
+    }
 
-    // NOTE: Async functions must be run on a different thread under tokio.  To accomplish this
-    // we need to clone the weak handle (NOTE: if we have multiple handlers, we may need to do the clone
-    // outside of the callback due to the move), make the async call, and then invoke the UI updating functions
-    // back on the main thread using `upgrade_in_event_loop`.
-    // TODO: Error handling - we are currently just printing errors to the console, we should gather those up from
-    // our async calls and log them somewhere, and possibly raise a dialog box for those operations which require it
-    // TODO: Boilerplate - most of this call is boilerplate. Possibly a good candidate for a macro.
+    fn theme(&self) -> Theme {
+        match self.global_settings.theme {
+            ThemeType::Dark => Theme::Dark,
+            ThemeType::Light => Theme::Light,
+        }
+    }
 
-    // NOTE: Clone here because we will move `ui_handle2` into the first delegate
-    // I wonder if we can store a static version of the weak handle and clone it wherever we need it...
+    fn subscription(&self) -> Subscription<Self::Message> {
+        subscription::events().map(Message::Event)
+    }
 
-    // NOTE: Second clone here because of the following error if we don't:
-    // error[E0507]: cannot move out of `ui_handle2`, a captured variable in an `FnMut` closure
-    //    --> asma\src\main.rs:97:29
-    //     |
-    // 92  |       let ui_handle2 = ui_handle.clone();
-    //     |           ---------- captured outer variable
-    // 93  |       ui.on_refresh_ip(move || {
-    //     |                        ------- captured by this `FnMut` closure
-    // ...
-    // 97  |           ASYNC_RUNTIME.spawn(async move {
-    //     |  _____________________________^
-    // 98  | |             let ip = refresh_ip().await;
-    // 99  | |             if let Ok(ip) = ip {
-    // 100 | |                 ui_handle2
-    //     | |                 ----------
-    //     | |                 |
-    //     | |                 variable moved due to use in generator
-    //     | |                 move occurs because `ui_handle2` has type `slint::Weak<AppWindow>`, which does not implement the `Copy` trait
-    // ...   |
-    // 110 | |             }
-    // 111 | |         });
-    //     | |_________^ `ui_handle2` is moved here
+    fn update(&mut self, message: Message) -> iced::Command<Message> {
+        //trace!("Message: {:?}", message);
+        match message {
+            Message::RefreshIp(ip_result) => {
+                trace!("Local IP resolved: {:?}", ip_result);
+                self.global_state.local_ip = ip_result;
+                Command::none()
+            }
+            Message::OpenGlobalSettings => {
+                self.mode = MainWindowMode::GlobalSettings;
+                widget::focus_next()
+            }
+            Message::CloseGlobalSettings => {
+                self.mode = MainWindowMode::Servers;
+                Command::none()
+            }
+            Message::UpdateSteamCmd => Command::perform(
+                get_steamcmd(self.global_settings.steamcmd_directory.to_owned()),
+                |_| Message::SteamCmdUpdated,
+            ),
+            Message::OpenSteamCmdDirectory => {
+                if let Err(e) = std::process::Command::new("explorer")
+                    .args([self.global_settings.steamcmd_directory.as_str()])
+                    .spawn()
+                {
+                    error!(
+                        "Failed to open {}: {}",
+                        self.global_settings.steamcmd_directory,
+                        e.to_string()
+                    );
+                }
+                Command::none()
+            }
+            Message::ThemeToggled(is_dark) => {
+                if is_dark {
+                    self.global_settings.theme = ThemeType::Dark;
+                } else {
+                    self.global_settings.theme = ThemeType::Light;
+                }
+                Command::none()
+            }
+            Message::SetSteamCmdDirectory => {
+                let default_path = self.global_settings.steamcmd_directory.as_str();
+                let folder = rfd::FileDialog::new()
+                    .set_title("Select SteamCMD directory")
+                    .set_directory(default_path)
+                    .pick_folder();
+                if let Some(folder) = folder {
+                    if let Some(folder) = folder.to_str() {
+                        info!("Setting path: {}", folder);
+                        self.global_settings.steamcmd_directory = folder.into();
+                    } else {
+                        error!("Failed to convert folder");
+                    }
+                } else {
+                    error!("No folder selected");
+                }
+                Command::none()
+            }
+            Message::SteamCmdUpdated => {
+                trace!("SteamCmdUpdated");
+                Command::none()
+            }
+            Message::OpenProfilesDirectory => {
+                if let Err(e) = std::process::Command::new("explorer")
+                    .args([self.global_settings.profiles_directory.as_str()])
+                    .spawn()
+                {
+                    error!(
+                        "Failed to open {}: {}",
+                        self.global_settings.profiles_directory,
+                        e.to_string()
+                    );
+                }
+                Command::none()
+            }
+            Message::SetProfilesDirectory => {
+                let default_path = self.global_settings.profiles_directory.as_str();
+                let folder = rfd::FileDialog::new()
+                    .set_title("Select SteamCMD directory")
+                    .set_directory(default_path)
+                    .pick_folder();
+                if let Some(folder) = folder {
+                    if let Some(folder) = folder.to_str() {
+                        info!("Setting path: {}", folder);
+                        self.global_settings.profiles_directory = folder.into();
+                    } else {
+                        error!("Failed to convert folder");
+                    }
+                } else {
+                    error!("No folder selected");
+                }
+                Command::none()
+            }
+            Message::Event(_event) => Command::none(),
+        }
+    }
 
-    // let ui_handle2 = ui_handle.clone();
-    // ui.on_profile_set_location(move || {
-    //     println!("profile_set_location pressed!");
-    //     let folder = rfd::FileDialog::new()
-    //         .set_title("Select installation directory")
-    //         .pick_folder();
-    //     if let Some(folder) = folder {
-    //         if let Some(folder) = folder.to_str() {
-    //             let ui = ui_handle2.unwrap();
-    //             let mut profile = ui.get_profile();
-    //             profile.settings.installation_location = folder.into();
-    //             ui.set_profile(profile);
-    //         }
-    //     }
-    // });
+    fn view(&self) -> Element<Message> {
+        let main_content = container(column![self.main_header(), horizontal_rule(3),])
+            .width(Length::Fill)
+            .height(Length::Fill);
 
-    // let ui_handle2 = ui_handle.clone();
-    // ui.on_profile_install(move || {
-    //     println!("profile_install pressed!");
-    //     let ui = ui_handle2.unwrap();
-    //     let profile = ui.get_profile();
-    //     if std::fs::create_dir_all(profile.settings.installation_location.as_str()).is_ok() {
-    //         let steamcmd = std::process::Command::new("E:\\Games\\SteamCMD\\steamcmd.exe")
-    //             .args([
-    //                 "+force_install_dir",
-    //                 profile.settings.installation_location.as_str(),
-    //                 "+login",
-    //                 "anonymous",
-    //                 "+app_update",
-    //                 "2430930",
-    //                 "validate",
-    //                 "+quit",
-    //             ])
-    //             .stdout(std::process::Stdio::inherit())
-    //             .spawn()
-    //             .map_err(|e| eprintln!("Failed to start steamcmd: {}", e.to_string()));
-    //         if let Ok(mut steamcmd) = steamcmd {
-    //             let result = steamcmd
-    //                 .wait()
-    //                 .map_err(|e| eprintln!("steamcmd errored: {}", e.to_string()));
-    //             if let Ok(exit_status) = result {
-    //                 println!("steamcmd exited with code {}", exit_status.to_string());
-    //             }
-    //         }
-    //     } else {
-    //         eprintln!(
-    //             "Failed to create directory: {}",
-    //             profile.settings.installation_location
-    //         );
-    //     }
-    // });
+        match self.mode {
+            MainWindowMode::Servers => main_content.into(),
+            MainWindowMode::GlobalSettings => Modal::new(main_content, self.global_settings())
+                .on_blur(Message::CloseGlobalSettings)
+                .into(),
+            MainWindowMode::EditProfile => main_content.into(),
+        }
+    }
+}
 
-    // This starts the event loop and doesn't return until the application window is closed.
-    app_window.run()
+impl AppState {
+    fn main_header(&self) -> Row<Message> {
+        row![
+            column![
+                text("ASM: Ascended")
+                    .size(40)
+                    .vertical_alignment(iced::alignment::Vertical::Top),
+                button(row![
+                    image::Image::new(icons::SETTINGS.clone())
+                        .width(24)
+                        .height(24),
+                    text("Global Settings...")
+                        .vertical_alignment(iced::alignment::Vertical::Center)
+                ])
+                .on_press(Message::OpenGlobalSettings)
+            ],
+            horizontal_space(Length::Fill),
+            column![
+                text("My Public IP"),
+                text(self.global_state.local_ip.to_string())
+            ]
+            .align_items(Alignment::Center),
+            horizontal_space(Length::Fill),
+            column![
+                text("Task Status"),
+                text("Auto-Backup: Unknown"),
+                text("Auto-Update: Unknown"),
+                text("Discord Bot: Disabled"),
+            ]
+            .align_items(Alignment::Center)
+        ]
+        .padding(10)
+    }
+
+    fn global_settings(&self) -> Container<Message> {
+        container(
+            column![
+                row![
+                    text("Global Settings").size(25),
+                    horizontal_space(Length::Fill),
+                    button(
+                        image::Image::new(icons::CANCEL.clone())
+                            .width(24)
+                            .height(24)
+                    )
+                    .on_press(Message::CloseGlobalSettings),
+                ],
+                row![
+                    text("Theme:").width(100),
+                    text("Light"),
+                    toggler(
+                        String::new(),
+                        match self.global_settings.theme {
+                            ThemeType::Light => false,
+                            _ => true,
+                        },
+                        Message::ThemeToggled
+                    )
+                    .width(Length::Shrink),
+                    text("Dark"),
+                    horizontal_space(Length::Fill)
+                ]
+                .spacing(5)
+                .height(32),
+                row![
+                    text("SteamCMD:")
+                        .width(100)
+                        .vertical_alignment(iced::alignment::Vertical::Center),
+                    text(self.global_settings.steamcmd_directory.to_owned())
+                        .vertical_alignment(iced::alignment::Vertical::Center),
+                    horizontal_space(Length::Fill),
+                    button(row![
+                        image::Image::new(icons::FOLDER_OPEN.clone())
+                            .width(24)
+                            .height(24),
+                        text("Open...").vertical_alignment(iced::alignment::Vertical::Center)
+                    ])
+                    .width(100)
+                    .padding(3)
+                    .on_press(Message::OpenSteamCmdDirectory),
+                    button(row![
+                        image::Image::new(icons::REFRESH.clone())
+                            .width(24)
+                            .height(24),
+                        text("Update").vertical_alignment(iced::alignment::Vertical::Center)
+                    ])
+                    .width(100)
+                    .padding(3)
+                    .on_press(Message::UpdateSteamCmd),
+                    button(row![
+                        image::Image::new(icons::FOLDER_OPEN.clone())
+                            .width(24)
+                            .height(24),
+                        text("Set Location...")
+                            .vertical_alignment(iced::alignment::Vertical::Center)
+                    ])
+                    .width(150)
+                    .padding(3)
+                    .on_press(Message::SetSteamCmdDirectory)
+                ]
+                .spacing(5),
+                row![
+                    text("Profiles:")
+                        .width(100)
+                        .vertical_alignment(iced::alignment::Vertical::Center),
+                    text(self.global_settings.profiles_directory.to_owned())
+                        .vertical_alignment(iced::alignment::Vertical::Center),
+                    horizontal_space(Length::Fill),
+                    button(row![
+                        image::Image::new(icons::FOLDER_OPEN.clone())
+                            .width(24)
+                            .height(24),
+                        text("Open...").vertical_alignment(iced::alignment::Vertical::Center)
+                    ])
+                    .width(100)
+                    .padding(3)
+                    .on_press(Message::OpenProfilesDirectory),
+                    button(row![
+                        image::Image::new(icons::FOLDER_OPEN.clone())
+                            .width(24)
+                            .height(24),
+                        text("Set Location...")
+                            .vertical_alignment(iced::alignment::Vertical::Center)
+                    ])
+                    .width(150)
+                    .padding(3)
+                    .on_press(Message::SetProfilesDirectory)
+                ]
+                .spacing(5)
+            ]
+            .spacing(5),
+        )
+        .padding(10)
+        .style(theme::Container::Box)
+    }
+}
+
+fn main() -> iced::Result {
+    init_tracing();
+
+    AppState::run(Settings {
+        ..Default::default()
+    })
 }
 
 fn init_tracing() {

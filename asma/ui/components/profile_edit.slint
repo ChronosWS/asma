@@ -1,11 +1,13 @@
 import { Button } from "std-widgets.slint";
 import { ServerProfile } from "../models/server_profile.slint";
-import { HorizontalBox } from "std-widgets.slint";
+import { HorizontalBox , TextEdit, LineEdit} from "std-widgets.slint";
 
 export component ProfileEdit inherits VerticalLayout {
     in-out property <ServerProfile> profile;
     callback save;
     callback close;
+    callback set-installation-location;
+    alignment: start;
     HorizontalLayout {
         Text {
             vertical-alignment: top;
@@ -25,6 +27,30 @@ export component ProfileEdit inherits VerticalLayout {
         }
     }
     HorizontalLayout {
-        vertical-stretch: 1;
+        Text {
+            vertical-alignment: center;
+            text: "Name: \{profile.name}";
+        }
+    }
+    HorizontalLayout {
+        Text {
+            vertical-alignment: center;
+            text: "Name:";
+        }
+        LineEdit { 
+            text: profile.name;
+            edited(val) => { profile.name = val; self.text = root.profile.name; }
+        }
+    }
+    HorizontalLayout {
+        Text {
+            vertical-alignment: center;
+            text: "Install Location: \{profile.settings.installation-location}";
+        }
+        Button {
+            text: "Set Location...";
+            icon: @image-url("../../res/icons/FolderOpen.ico");
+            clicked => { set-installation-location() }
+        }
     }
 }

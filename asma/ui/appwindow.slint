@@ -62,7 +62,7 @@ export component AppWindow inherits Window {
                 col :0;
                 row :0;
                 ProfileEdit {
-                    profile: current-edit-profile;
+                    profile <=> current-edit-profile;
                     close => { profile-edit-close() }
                     save => { profile-edit-save() }
                 }

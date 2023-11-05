@@ -19,7 +19,7 @@ This project aims to re-create and update the [Ark Server Manager](https://githu
 
 ## Technologies
 
-This project uses [Rust](https://www.rust-lang.org/) and [slint](https://slint.dev/). This change from .NET brings some benefits and drawbacks.
+This project uses [Rust](https://www.rust-lang.org/) and [iced](https://docs.rs/iced/0.10.0/iced/). This change from .NET brings some benefits and drawbacks.
 
 Benefits:
 * Rust makes it easy to produce robust and performant applications

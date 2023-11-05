@@ -6,11 +6,11 @@ To get up and running, you need the following:
 
 * `rustup` - Install from [rustlang.org](https://www.rust-lang.org/tools/install)
 * `rustc` - Version 1.73 at least.  Instructions at [rustlang.org](https://blog.rust-lang.org/2023/10/05/Rust-1.73.0.html)
-* Visual Studio Code (optional) - [code.visualstudio.com](https://code.visualstudio.com/)
+* Microsoft Build Tools for C++ - [visualstudio.microsoft.com](https://aka.ms/vs/17/release/vs_BuildTools.exe)
+*  (optional) Visual Studio Code - [code.visualstudio.com](https://code.visualstudio.com/)
 
 If you are using VSCode, you will also want several extensions:
 * `rust-analyzer`
-* `Slint`
 * `Even Better TOML`
 * `CodeLLDB`
 
