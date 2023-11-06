@@ -374,14 +374,16 @@ impl Application for AppState {
                         .horizontal_alignment(Horizontal::Center),
                 )
             } else {
-                container(scrollable(column(
-                    self.servers.iter().map(server_card).collect(),
-                )))
+                container(scrollable(
+                    column(self.servers.iter().map(server_card).collect()).spacing(5),
+                ))
             } // if self.servers.is_empty() {
               // } else {
               //     scrollable(column![]).into()
               // }
         ]
+        .spacing(5)
+        .padding(5)
         .width(Length::Fill)
         .height(Length::Fill);
 

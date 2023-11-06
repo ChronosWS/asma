@@ -34,5 +34,5 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
         ]
         .align_items(Alignment::Center)
     ]
-    .padding(10)
+    .padding(5)
 }
