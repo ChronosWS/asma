@@ -1,9 +1,11 @@
 use iced::{
-    widget::{button, column, horizontal_space, image, row, text, Row},
+    widget::{column, horizontal_space, row, text, Row},
     Alignment, Length,
 };
 
 use crate::{icons, models::GlobalState, Message};
+
+use super::make_button;
 
 pub fn main_header(global_state: &GlobalState) -> Row<Message> {
     row![
@@ -11,13 +13,11 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
             text("ASM: Ascended")
                 .size(40)
                 .vertical_alignment(iced::alignment::Vertical::Top),
-            button(row![
-                image::Image::new(icons::SETTINGS.clone())
-                    .width(24)
-                    .height(24),
-                text("Global Settings...").vertical_alignment(iced::alignment::Vertical::Center)
-            ])
-            .on_press(Message::OpenGlobalSettings)
+            make_button(
+                "Global Settings...",
+                Message::OpenGlobalSettings,
+                icons::SETTINGS.clone()
+            )
         ],
         horizontal_space(Length::Fill),
         column![

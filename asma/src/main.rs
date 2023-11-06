@@ -1,7 +1,10 @@
-use iced::widget::{self, column, container, horizontal_rule};
+use components::make_button;
+use fonts::{get_system_font_bytes, BOLD_FONT, ITALIC_FONT};
+use iced::alignment::{Vertical, Horizontal};
+use iced::widget::{self, column, container, horizontal_rule, row, scrollable, text};
 use iced::{
-    executor, subscription, Application, Command, Element, Event, Length, Settings, Subscription,
-    Theme,
+    executor, font, subscription, Application, Color, Command, Element, Event, Length, Settings,
+    Subscription, Theme,
 };
 
 use steamcmd_utils::get_steamcmd;
@@ -10,6 +13,7 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod components;
 mod dialogs;
+mod fonts;
 mod icons;
 mod modal;
 mod models;
@@ -42,12 +46,16 @@ struct AppState {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    FontLoaded(Result<String, font::Error>),
     RefreshIp(LocalIp),
+
+    // Global Settings
     OpenGlobalSettings,
     CloseGlobalSettings,
 
     // Theme
     ThemeToggled(bool),
+    DebugUIToggled(bool),
 
     // Profiles
     OpenProfilesDirectory,
@@ -58,6 +66,9 @@ pub enum Message {
     UpdateSteamCmd,
     SetSteamCmdDirectory,
     SteamCmdUpdated,
+
+    // Servers
+    NewServer,
 
     // Keyboard and Mouse events
     Event(Event),
@@ -70,9 +81,8 @@ impl Application for AppState {
     type Flags = ();
 
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
-        let local_app_data =
-            std::env::var("LOCALAPPDATA").expect("Failed to get LOCALAPPDATA environment variable");
-
+        let arial_bytes = get_system_font_bytes("ARIAL.ttf").expect("Failed to find Arial");
+        let bold_bytes = get_system_font_bytes("ARIALBD.ttf").expect("Failed to find Arial Bold");
         (
             AppState {
                 global_settings: settings_utils::load_global_settings()
@@ -84,13 +94,19 @@ impl Application for AppState {
                 servers: Vec::new(),
                 mode: MainWindowMode::Servers,
             },
-            Command::perform(network_utils::refresh_ip(), |result| {
-                if let Ok(ip_addr) = result {
-                    Message::RefreshIp(LocalIp::Resolved(ip_addr))
-                } else {
-                    Message::RefreshIp(LocalIp::Failed)
-                }
-            }),
+            Command::batch(vec![
+                font::load(std::borrow::Cow::from(arial_bytes))
+                    .map(|v| Message::FontLoaded(v.map(|_| "Arial".into()))),
+                // font::load(std::borrow::Cow::from(bold_bytes))
+                //     .map(|v| Message::FontLoaded(v.map(|_| "Arial Bold".into()))),
+                Command::perform(network_utils::refresh_ip(), |result| {
+                    if let Ok(ip_addr) = result {
+                        Message::RefreshIp(LocalIp::Resolved(ip_addr))
+                    } else {
+                        Message::RefreshIp(LocalIp::Failed)
+                    }
+                }),
+            ]),
         )
     }
 
@@ -118,6 +134,14 @@ impl Application for AppState {
             Message::RefreshIp(ip_result) => {
                 trace!("Local IP resolved: {:?}", ip_result);
                 self.global_state.local_ip = ip_result;
+                Command::none()
+            }
+            Message::FontLoaded(result) => {
+                match result {
+                    Ok(n) => trace!("Loaded font {}", n),
+                    Err(e) => error!("Failed to load font: {:?}", e),
+                }
+
                 Command::none()
             }
             Message::OpenGlobalSettings => {
@@ -153,6 +177,10 @@ impl Application for AppState {
                 } else {
                     self.global_settings.theme = ThemeType::Light;
                 }
+                Command::none()
+            }
+            Message::DebugUIToggled(enable) => {
+                self.global_settings.debug_ui = enable;
                 Command::none()
             }
             Message::SetSteamCmdDirectory => {
@@ -208,19 +236,44 @@ impl Application for AppState {
                 }
                 Command::none()
             }
+            Message::NewServer => {
+                trace!("TODO: New Server");
+                Command::none()
+            }
             Message::Event(_event) => Command::none(),
         }
     }
 
     fn view(&self) -> Element<Message> {
-        let main_content = container(column![
-            components::main_header(&self.global_state),
-            horizontal_rule(3),
-        ])
+        let main_header = components::main_header(&self.global_state);
+
+        let servers_list = column![
+            row![make_button(
+                "New Server",
+                Message::NewServer,
+                icons::ADD.clone()
+            )],
+            text("NO SERVERS YET")
+                .font(BOLD_FONT)
+                .size(32)
+                .style(Color::from([0.5, 0.5, 0.5]))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .vertical_alignment(Vertical::Center)
+                .horizontal_alignment(Horizontal::Center)
+                 // if self.servers.is_empty() {
+                // } else {
+                //     scrollable(column![]).into()
+                // }
+        ]
         .width(Length::Fill)
         .height(Length::Fill);
 
-        match self.mode {
+        let main_content = container(column![main_header, horizontal_rule(3), servers_list])
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        let result: Element<Message> = match self.mode {
             MainWindowMode::Servers => main_content.into(),
             MainWindowMode::GlobalSettings => Modal::new(
                 main_content,
@@ -229,6 +282,11 @@ impl Application for AppState {
             .on_blur(Message::CloseGlobalSettings)
             .into(),
             MainWindowMode::EditProfile => main_content.into(),
+        };
+        if self.global_settings.debug_ui {
+            result.explain(Color::BLACK)
+        } else {
+            result
         }
     }
 }

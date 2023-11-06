@@ -43,6 +43,7 @@ pub fn default_global_settings() -> GlobalSettings {
 
     GlobalSettings {
         theme: ThemeType::Dark,
+        debug_ui: false,
         app_data_directory: APP_DATA_ROOT.clone(),
         profiles_directory: default_profile_directory.to_str().unwrap().into(),
         steamcmd_directory: default_steamcmd_directory.to_str().unwrap().into(),
