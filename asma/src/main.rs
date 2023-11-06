@@ -1,26 +1,24 @@
-use std::fmt::Display;
-use std::{net::IpAddr, path::PathBuf};
-
-use iced::widget::{
-    self, button, column, container, horizontal_rule, horizontal_space, image, row, text, toggler,
-    vertical_space, Container, Row,
-};
+use iced::widget::{self, column, container, horizontal_rule};
 use iced::{
-    executor, subscription, theme, Alignment, Application, Command, Element, Event, Length, Pixels,
-    Settings, Subscription, Theme,
+    executor, subscription, Application, Command, Element, Event, Length, Settings, Subscription,
+    Theme,
 };
 
 use steamcmd_utils::get_steamcmd;
-use tracing::{error, info, trace, warn, Level};
+use tracing::{error, info, trace, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
-use uuid::Uuid;
 
+mod components;
+mod dialogs;
 mod icons;
 mod modal;
+mod models;
 mod network_utils;
+mod settings_utils;
 mod steamcmd_utils;
 
 use modal::Modal;
+use models::*;
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -28,61 +26,6 @@ use modal::Modal;
 // * The messages, which communicate user interactions or events we care about
 // * The view logic, which tells the system how to draw and maps user interactions to messages
 // * The update logic, which processes messages and updates the state
-
-enum ThemeType {
-    Light,
-    Dark,
-}
-
-struct GlobalSettings {
-    theme: ThemeType,
-    app_data_directory: String,
-    profiles_directory: String,
-    steamcmd_directory: String,
-}
-
-struct ServerSettings {
-    installation_location: String,
-}
-
-struct ServerState {
-    installed_version: String,
-    status: String,
-    availability: String,
-    current_players: u8,
-    max_players: u8,
-}
-
-struct ServerProfile {
-    id: String,
-    name: String,
-    settings: ServerSettings,
-    state: ServerState,
-}
-
-#[derive(Debug, Clone)]
-enum LocalIp {
-    Unknown,
-    Failed,
-    Resolving,
-    Resolved(IpAddr),
-}
-
-impl Display for LocalIp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LocalIp::Unknown => write!(f, "<unknown>"),
-            LocalIp::Failed => write!(f, "FAILED"),
-            LocalIp::Resolving => write!(f, "Resolving..."),
-            LocalIp::Resolved(ip_addr) => write!(f, "{}", ip_addr.to_string()),
-        }
-    }
-}
-
-struct GlobalState {
-    app_version: String,
-    local_ip: LocalIp,
-}
 
 enum MainWindowMode {
     Servers,
@@ -93,12 +36,12 @@ enum MainWindowMode {
 struct AppState {
     global_settings: GlobalSettings,
     global_state: GlobalState,
-    server_profiles: Vec<ServerProfile>,
+    servers: Vec<Server>,
     mode: MainWindowMode,
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
     RefreshIp(LocalIp),
     OpenGlobalSettings,
     CloseGlobalSettings,
@@ -126,34 +69,19 @@ impl Application for AppState {
     type Theme = Theme;
     type Flags = ();
 
-    fn new(flags: Self::Flags) -> (Self, Command<Message>) {
+    fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
         let local_app_data =
             std::env::var("LOCALAPPDATA").expect("Failed to get LOCALAPPDATA environment variable");
 
-        let app_data_directory = PathBuf::from(format!("{local_app_data}\\ASMAscended"));
-        let mut default_profile_directory = app_data_directory.to_owned();
-        default_profile_directory.push("Profiles");
-        let mut default_steamcmd_directory = app_data_directory.to_owned();
-        default_steamcmd_directory.push("SteamCMD");
-
-        std::fs::create_dir_all(default_profile_directory.clone())
-            .expect("Failed to create default profile directory");
-        std::fs::create_dir_all(default_steamcmd_directory.clone())
-            .expect("Failed to create default SteamCMD directory");
-
         (
             AppState {
-                global_settings: GlobalSettings {
-                    theme: ThemeType::Dark,
-                    app_data_directory: app_data_directory.to_str().unwrap().into(),
-                    profiles_directory: default_profile_directory.to_str().unwrap().into(),
-                    steamcmd_directory: default_steamcmd_directory.to_str().unwrap().into(),
-                },
+                global_settings: settings_utils::load_global_settings()
+                    .unwrap_or_else(|_| settings_utils::default_global_settings()),
                 global_state: GlobalState {
                     app_version: env!("CARGO_PKG_VERSION").into(),
                     local_ip: LocalIp::Unknown,
                 },
-                server_profiles: Vec::new(),
+                servers: Vec::new(),
                 mode: MainWindowMode::Servers,
             },
             Command::perform(network_utils::refresh_ip(), |result| {
@@ -198,6 +126,8 @@ impl Application for AppState {
             }
             Message::CloseGlobalSettings => {
                 self.mode = MainWindowMode::Servers;
+                let _ = settings_utils::save_global_settings(&self.global_settings)
+                    .map_err(|e| error!("Failed to save global settings: {}", e.to_string()));
                 Command::none()
             }
             Message::UpdateSteamCmd => Command::perform(
@@ -283,154 +213,23 @@ impl Application for AppState {
     }
 
     fn view(&self) -> Element<Message> {
-        let main_content = container(column![self.main_header(), horizontal_rule(3),])
-            .width(Length::Fill)
-            .height(Length::Fill);
+        let main_content = container(column![
+            components::main_header(&self.global_state),
+            horizontal_rule(3),
+        ])
+        .width(Length::Fill)
+        .height(Length::Fill);
 
         match self.mode {
             MainWindowMode::Servers => main_content.into(),
-            MainWindowMode::GlobalSettings => Modal::new(main_content, self.global_settings())
-                .on_blur(Message::CloseGlobalSettings)
-                .into(),
+            MainWindowMode::GlobalSettings => Modal::new(
+                main_content,
+                dialogs::global_settings(&self.global_settings),
+            )
+            .on_blur(Message::CloseGlobalSettings)
+            .into(),
             MainWindowMode::EditProfile => main_content.into(),
         }
-    }
-}
-
-impl AppState {
-    fn main_header(&self) -> Row<Message> {
-        row![
-            column![
-                text("ASM: Ascended")
-                    .size(40)
-                    .vertical_alignment(iced::alignment::Vertical::Top),
-                button(row![
-                    image::Image::new(icons::SETTINGS.clone())
-                        .width(24)
-                        .height(24),
-                    text("Global Settings...")
-                        .vertical_alignment(iced::alignment::Vertical::Center)
-                ])
-                .on_press(Message::OpenGlobalSettings)
-            ],
-            horizontal_space(Length::Fill),
-            column![
-                text("My Public IP"),
-                text(self.global_state.local_ip.to_string())
-            ]
-            .align_items(Alignment::Center),
-            horizontal_space(Length::Fill),
-            column![
-                text("Task Status"),
-                text("Auto-Backup: Unknown"),
-                text("Auto-Update: Unknown"),
-                text("Discord Bot: Disabled"),
-            ]
-            .align_items(Alignment::Center)
-        ]
-        .padding(10)
-    }
-
-    fn global_settings(&self) -> Container<Message> {
-        container(
-            column![
-                row![
-                    text("Global Settings").size(25),
-                    horizontal_space(Length::Fill),
-                    button(
-                        image::Image::new(icons::CANCEL.clone())
-                            .width(24)
-                            .height(24)
-                    )
-                    .on_press(Message::CloseGlobalSettings),
-                ],
-                row![
-                    text("Theme:").width(100),
-                    text("Light"),
-                    toggler(
-                        String::new(),
-                        match self.global_settings.theme {
-                            ThemeType::Light => false,
-                            _ => true,
-                        },
-                        Message::ThemeToggled
-                    )
-                    .width(Length::Shrink),
-                    text("Dark"),
-                    horizontal_space(Length::Fill)
-                ]
-                .spacing(5)
-                .height(32),
-                row![
-                    text("SteamCMD:")
-                        .width(100)
-                        .vertical_alignment(iced::alignment::Vertical::Center),
-                    text(self.global_settings.steamcmd_directory.to_owned())
-                        .vertical_alignment(iced::alignment::Vertical::Center),
-                    horizontal_space(Length::Fill),
-                    button(row![
-                        image::Image::new(icons::FOLDER_OPEN.clone())
-                            .width(24)
-                            .height(24),
-                        text("Open...").vertical_alignment(iced::alignment::Vertical::Center)
-                    ])
-                    .width(100)
-                    .padding(3)
-                    .on_press(Message::OpenSteamCmdDirectory),
-                    button(row![
-                        image::Image::new(icons::REFRESH.clone())
-                            .width(24)
-                            .height(24),
-                        text("Update").vertical_alignment(iced::alignment::Vertical::Center)
-                    ])
-                    .width(100)
-                    .padding(3)
-                    .on_press(Message::UpdateSteamCmd),
-                    button(row![
-                        image::Image::new(icons::FOLDER_OPEN.clone())
-                            .width(24)
-                            .height(24),
-                        text("Set Location...")
-                            .vertical_alignment(iced::alignment::Vertical::Center)
-                    ])
-                    .width(150)
-                    .padding(3)
-                    .on_press(Message::SetSteamCmdDirectory)
-                ]
-                .spacing(5),
-                row![
-                    text("Profiles:")
-                        .width(100)
-                        .vertical_alignment(iced::alignment::Vertical::Center),
-                    text(self.global_settings.profiles_directory.to_owned())
-                        .vertical_alignment(iced::alignment::Vertical::Center),
-                    horizontal_space(Length::Fill),
-                    button(row![
-                        image::Image::new(icons::FOLDER_OPEN.clone())
-                            .width(24)
-                            .height(24),
-                        text("Open...").vertical_alignment(iced::alignment::Vertical::Center)
-                    ])
-                    .width(100)
-                    .padding(3)
-                    .on_press(Message::OpenProfilesDirectory),
-                    button(row![
-                        image::Image::new(icons::FOLDER_OPEN.clone())
-                            .width(24)
-                            .height(24),
-                        text("Set Location...")
-                            .vertical_alignment(iced::alignment::Vertical::Center)
-                    ])
-                    .width(150)
-                    .padding(3)
-                    .on_press(Message::SetProfilesDirectory)
-                ]
-                .spacing(5)
-            ]
-            .spacing(5),
-        )
-        .padding(10)
-        .style(theme::Container::Box)
     }
 }
 
@@ -444,8 +243,9 @@ fn main() -> iced::Result {
 
 fn init_tracing() {
     let env_filter = EnvFilter::builder()
-        .parse("asma=TRACE")
-        .expect("Bad tracing filter");
+        .with_default_directive("asma=TRACE".parse().unwrap())
+        .from_env()
+        .expect("Invalid trace filter specified");
     let subscriber = FmtSubscriber::builder()
         // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
         // will be written to stdout.
