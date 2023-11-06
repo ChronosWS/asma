@@ -60,10 +60,7 @@ fn get_default_global_settings_path() -> PathBuf {
     };
 
     global_settings_path.push("global_settings.json");
-    trace!(
-        "Global Settings path is {:?}",
-        &global_settings_path
-    );
+    trace!("Global Settings path is {:?}", &global_settings_path);
     global_settings_path
 }
 
@@ -71,7 +68,12 @@ fn load_global_settings_from(path: impl AsRef<str>) -> Result<GlobalSettings> {
     trace!("Trying to loading global settings from {}", path.as_ref());
     let global_settings = std::fs::read_to_string(path.as_ref())?;
     let mut global_settings: GlobalSettings = serde_json::from_str(&global_settings)?;
-    global_settings.app_data_directory = path.as_ref().to_owned();
+    global_settings.app_data_directory = Path::new(path.as_ref())
+        .parent()
+        .expect("Failed to get parent of global settings file")
+        .to_str()
+        .expect("Failed to convert path to string")
+        .to_owned();
     Ok(global_settings)
 }
 
