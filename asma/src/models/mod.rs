@@ -32,11 +32,14 @@ impl Display for LocalIp {
 #[derive(Serialize, Deserialize)]
 pub struct GlobalSettings {
     pub theme: ThemeType,
-    #[serde(skip)]
-    pub debug_ui: bool,
-    pub app_data_directory: String,
     pub profiles_directory: String,
     pub steamcmd_directory: String,
+
+    // Transient settings
+    #[serde(skip)]
+    pub debug_ui: bool,
+    #[serde(skip)]
+    pub app_data_directory: String,
 }
 
 pub struct GlobalState {

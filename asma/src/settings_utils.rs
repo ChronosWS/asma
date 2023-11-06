@@ -19,22 +19,14 @@ static APP_DATA_ROOT: String = {
     .into()
 };
 
-#[dynamic]
-static GLOBAL_SETTINGS_FILE: String = {
-    Path::new(APP_DATA_ROOT.as_str())
-        .join("global_settings.json")
-        .to_str()
-        .expect("Failed to get GLOBAL_SETTINGS_FILE")
-        .to_owned()
-};
-
-pub fn get_settings_dir() -> &'static str {
-    &APP_DATA_ROOT
-}
-
 pub fn default_global_settings() -> GlobalSettings {
-    let default_profile_directory = Path::new(get_settings_dir()).join("Profiles");
-    let default_steamcmd_directory = Path::new(get_settings_dir()).join("SteamCMD");
+    let default_global_settings_path = get_default_global_settings_path();
+    let default_app_data_directory = default_global_settings_path
+        .parent()
+        .expect("Failed to get root of global settings path");
+
+    let default_profile_directory = default_app_data_directory.join("Profiles");
+    let default_steamcmd_directory = default_app_data_directory.join("SteamCMD");
 
     std::fs::create_dir_all(&default_profile_directory)
         .expect("Failed to create default profile directory");
@@ -44,31 +36,59 @@ pub fn default_global_settings() -> GlobalSettings {
     GlobalSettings {
         theme: ThemeType::Dark,
         debug_ui: false,
-        app_data_directory: APP_DATA_ROOT.clone(),
+        app_data_directory: default_app_data_directory.to_str().unwrap().into(),
         profiles_directory: default_profile_directory.to_str().unwrap().into(),
         steamcmd_directory: default_steamcmd_directory.to_str().unwrap().into(),
     }
 }
 
-pub fn load_global_settings() -> Result<GlobalSettings> {
+fn get_default_global_settings_path() -> PathBuf {
+    // If the current process directory is writeable, then we expect it to be there
+    // Otherwise we will try for LOCAL_APP_DATA
+    let global_settings_path = process_path::get_executable_path()
+        .expect("Failed to get process path!")
+        .parent()
+        .expect("Failed to get process path parent")
+        .to_owned();
+
+    let dir_metadata =
+        std::fs::metadata(&global_settings_path).expect("Failed to get metadata from process path");
+    let mut global_settings_path = if !dir_metadata.permissions().readonly() {
+        global_settings_path
+    } else {
+        PathBuf::from(APP_DATA_ROOT.to_owned())
+    };
+
+    global_settings_path.push("global_settings.json");
     trace!(
-        "Loading global settings from {}",
-        GLOBAL_SETTINGS_FILE.as_str()
+        "Global Settings path is {:?}",
+        &global_settings_path
     );
-    let global_settings = std::fs::read_to_string(GLOBAL_SETTINGS_FILE.as_str())?;
-    Ok(serde_json::from_str(&global_settings)?)
+    global_settings_path
+}
+
+fn load_global_settings_from(path: impl AsRef<str>) -> Result<GlobalSettings> {
+    trace!("Trying to loading global settings from {}", path.as_ref());
+    let global_settings = std::fs::read_to_string(path.as_ref())?;
+    let mut global_settings: GlobalSettings = serde_json::from_str(&global_settings)?;
+    global_settings.app_data_directory = path.as_ref().to_owned();
+    Ok(global_settings)
+}
+
+pub fn load_global_settings() -> Result<GlobalSettings> {
+    load_global_settings_from(
+        get_default_global_settings_path()
+            .to_str()
+            .expect("Failed to get global settings path as string"),
+    )
 }
 
 pub fn save_global_settings(global_settings: &GlobalSettings) -> Result<()> {
-    trace!(
-        "Saving global settings to {}",
-        GLOBAL_SETTINGS_FILE.as_str()
-    );
-    let global_settings = serde_json::to_string_pretty(global_settings)?;
-    Ok(std::fs::write(
-        GLOBAL_SETTINGS_FILE.as_str(),
-        global_settings,
-    )?)
+    let global_settings_path =
+        Path::new(&global_settings.app_data_directory).join("global_settings.json");
+    trace!("Saving global settings to {:?}", &global_settings_path);
+    let global_settings_json = serde_json::to_string_pretty(global_settings)?;
+    Ok(std::fs::write(&global_settings_path, global_settings_json)?)
 }
 
 pub fn load_server_settings(global_settings: &GlobalSettings) -> Result<Vec<ServerSettings>> {

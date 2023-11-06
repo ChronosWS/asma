@@ -49,7 +49,8 @@ pub fn global_settings(global_settings: &GlobalSettings) -> Container<Message> {
                     .width(100)
                     .vertical_alignment(Vertical::Center),
                 text(global_settings.steamcmd_directory.to_owned())
-                    .vertical_alignment(Vertical::Center),
+                    .vertical_alignment(Vertical::Center)
+                    .width(Length::Shrink),
                 horizontal_space(Length::Fill),
                 make_button(
                     "Open...",
