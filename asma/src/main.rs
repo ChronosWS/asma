@@ -1,6 +1,6 @@
-use components::make_button;
-use fonts::{get_system_font_bytes, BOLD_FONT, ITALIC_FONT};
-use iced::alignment::{Vertical, Horizontal};
+use components::{make_button, server_card};
+use fonts::{get_system_font_bytes, BOLD_FONT};
+use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{self, column, container, horizontal_rule, row, scrollable, text};
 use iced::{
     executor, font, subscription, Application, Color, Command, Element, Event, Length, Settings,
@@ -23,6 +23,7 @@ mod steamcmd_utils;
 
 use modal::Modal;
 use models::*;
+use uuid::Uuid;
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -44,6 +45,21 @@ struct AppState {
     mode: MainWindowMode,
 }
 
+impl AppState {
+    pub fn get_server_settings(&self, id: Uuid) -> Option<&ServerSettings> {
+        self.servers
+            .iter()
+            .find(|s| s.settings.id == id)
+            .map(|s| &s.settings)
+    }
+    pub fn get_server_settings_mut(&mut self, id: Uuid) -> Option<&mut ServerSettings> {
+        self.servers
+            .iter_mut()
+            .find(|s| s.settings.id == id)
+            .map(|s| &mut s.settings)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     FontLoaded(Result<String, font::Error>),
@@ -52,6 +68,12 @@ pub enum Message {
     // Global Settings
     OpenGlobalSettings,
     CloseGlobalSettings,
+
+    // Server Settings
+    CloseServerSettings(Uuid),
+    ServerSetName(Uuid, String),
+    OpenServerInstallationDirectory(Uuid),
+    SetServerInstallationDirectory(Uuid),
 
     // Theme
     ThemeToggled(bool),
@@ -69,6 +91,7 @@ pub enum Message {
 
     // Servers
     NewServer,
+    EditServer(Uuid),
 
     // Keyboard and Mouse events
     Event(Event),
@@ -82,23 +105,30 @@ impl Application for AppState {
 
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
         let arial_bytes = get_system_font_bytes("ARIAL.ttf").expect("Failed to find Arial");
-        let bold_bytes = get_system_font_bytes("ARIALBD.ttf").expect("Failed to find Arial Bold");
+        let global_settings = settings_utils::load_global_settings()
+            .unwrap_or_else(|_| settings_utils::default_global_settings());
+        let servers = settings_utils::load_server_settings(&global_settings)
+            .expect("Failed to load server settings")
+            .drain(..)
+            .map(|settings| Server {
+                settings,
+                state: ServerState::default(),
+            })
+            .collect();
         (
             AppState {
-                global_settings: settings_utils::load_global_settings()
-                    .unwrap_or_else(|_| settings_utils::default_global_settings()),
+                global_settings,
                 global_state: GlobalState {
                     app_version: env!("CARGO_PKG_VERSION").into(),
                     local_ip: LocalIp::Unknown,
+                    edit_server_id: Uuid::nil(),
                 },
-                servers: Vec::new(),
+                servers,
                 mode: MainWindowMode::Servers,
             },
             Command::batch(vec![
                 font::load(std::borrow::Cow::from(arial_bytes))
                     .map(|v| Message::FontLoaded(v.map(|_| "Arial".into()))),
-                // font::load(std::borrow::Cow::from(bold_bytes))
-                //     .map(|v| Message::FontLoaded(v.map(|_| "Arial Bold".into()))),
                 Command::perform(network_utils::refresh_ip(), |result| {
                     if let Ok(ip_addr) = result {
                         Message::RefreshIp(LocalIp::Resolved(ip_addr))
@@ -152,6 +182,65 @@ impl Application for AppState {
                 self.mode = MainWindowMode::Servers;
                 let _ = settings_utils::save_global_settings(&self.global_settings)
                     .map_err(|e| error!("Failed to save global settings: {}", e.to_string()));
+                Command::none()
+            }
+            Message::ServerSetName(id, name) => {
+                if let Some(server_settings) = self.get_server_settings_mut(id) {
+                    server_settings.name = name;
+                }
+                Command::none()
+            }
+            Message::CloseServerSettings(id) => {
+                self.mode = MainWindowMode::Servers;
+                if let Some(server_settings) = self.get_server_settings(id) {
+                    let _ = settings_utils::save_server_settings(
+                        &self.global_settings,
+                        &server_settings,
+                    )
+                    .map_err(|e| {
+                        error!(
+                            "Failed to save server settings for server {} ({}): {}",
+                            &server_settings.name,
+                            server_settings.id.to_string(),
+                            e.to_string()
+                        )
+                    });
+                }
+                Command::none()
+            }
+            Message::OpenServerInstallationDirectory(id) => {
+                if let Some(server_settings) = self.get_server_settings(id) {
+                    if let Err(e) = std::process::Command::new("explorer")
+                        .args([server_settings.installation_location.as_str()])
+                        .spawn()
+                    {
+                        error!(
+                            "Failed to open {}: {}",
+                            server_settings.installation_location,
+                            e.to_string()
+                        );
+                    }
+                }
+                Command::none()
+            }
+            Message::SetServerInstallationDirectory(id) => {
+                if let Some(server_settings) = self.get_server_settings_mut(id) {
+                    let default_path = server_settings.installation_location.as_str();
+                    let folder = rfd::FileDialog::new()
+                        .set_title("Select server installation directory")
+                        .set_directory(default_path)
+                        .pick_folder();
+                    if let Some(folder) = folder {
+                        if let Some(folder) = folder.to_str() {
+                            info!("Setting path: {}", folder);
+                            server_settings.installation_location = folder.into();
+                        } else {
+                            error!("Failed to convert folder");
+                        }
+                    } else {
+                        error!("No folder selected");
+                    }
+                }
                 Command::none()
             }
             Message::UpdateSteamCmd => Command::perform(
@@ -238,6 +327,26 @@ impl Application for AppState {
             }
             Message::NewServer => {
                 trace!("TODO: New Server");
+                self.mode = MainWindowMode::EditProfile;
+                let server = Server {
+                    settings: ServerSettings {
+                        id: Uuid::new_v4(),
+                        name: String::new(),
+                        installation_location: String::new(),
+                    },
+                    state: ServerState::default(),
+                };
+                self.global_state.edit_server_id = server.settings.id;
+                self.servers.push(server);
+                Command::none()
+            }
+            Message::EditServer(id) => {
+                trace!("Edit Server {}", id.to_string());
+                self.mode = MainWindowMode::EditProfile;
+                let edit_server = self
+                    .get_server_settings(id)
+                    .expect("Attempt to edit non-existant server");
+                self.global_state.edit_server_id = edit_server.id;
                 Command::none()
             }
             Message::Event(_event) => Command::none(),
@@ -253,18 +362,25 @@ impl Application for AppState {
                 Message::NewServer,
                 icons::ADD.clone()
             )],
-            text("NO SERVERS YET")
-                .font(BOLD_FONT)
-                .size(32)
-                .style(Color::from([0.5, 0.5, 0.5]))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .vertical_alignment(Vertical::Center)
-                .horizontal_alignment(Horizontal::Center)
-                 // if self.servers.is_empty() {
-                // } else {
-                //     scrollable(column![]).into()
-                // }
+            if self.servers.is_empty() {
+                container(
+                    text("NO SERVERS YET")
+                        .font(BOLD_FONT)
+                        .size(32)
+                        .style(Color::from([0.5, 0.5, 0.5]))
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .vertical_alignment(Vertical::Center)
+                        .horizontal_alignment(Horizontal::Center),
+                )
+            } else {
+                container(scrollable(column(
+                    self.servers.iter().map(server_card).collect(),
+                )))
+            } // if self.servers.is_empty() {
+              // } else {
+              //     scrollable(column![]).into()
+              // }
         ]
         .width(Length::Fill)
         .height(Length::Fill);
@@ -281,7 +397,14 @@ impl Application for AppState {
             )
             .on_blur(Message::CloseGlobalSettings)
             .into(),
-            MainWindowMode::EditProfile => main_content.into(),
+            MainWindowMode::EditProfile => {
+                let server_settings = self
+                    .get_server_settings(self.global_state.edit_server_id)
+                    .expect("Non-existant server requested for edit");
+                Modal::new(main_content, dialogs::server_settings(server_settings))
+                    .on_blur(Message::CloseServerSettings(server_settings.id))
+                    .into()
+            }
         };
         if self.global_settings.debug_ui {
             result.explain(Color::BLACK)

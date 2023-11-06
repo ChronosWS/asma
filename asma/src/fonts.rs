@@ -4,7 +4,6 @@ use anyhow::Result;
 use iced::{Font, font::{Family, Weight, Stretch}};
 use tracing::trace;
 
-pub const ITALIC_FONT: Font = Font::with_name("Arial");
 pub const BOLD_FONT: Font = Font {
     family: Family::Name("Arial"),
     weight: Weight::Bold,

@@ -1,6 +1,7 @@
 use std::{fmt::Display, net::IpAddr};
 
 use serde::{Serialize, Deserialize};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 pub enum ThemeType {
@@ -41,15 +42,17 @@ pub struct GlobalSettings {
 pub struct GlobalState {
     pub app_version: String,
     pub local_ip: LocalIp,
+    pub edit_server_id: Uuid
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ServerSettings {
-    pub id: String,
+    pub id: Uuid,
     pub name: String,
     pub installation_location: String,
 }
 
+#[derive(Default)]
 pub struct ServerState {
     pub installed_version: String,
     pub status: String,
