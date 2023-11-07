@@ -7,23 +7,29 @@ use iced::{
     Subscription, Theme,
 };
 
+use settings_utils::save_server_settings_with_error;
 use steamcmd_utils::get_steamcmd;
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::{error, info, trace, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod components;
 mod dialogs;
+mod file_utils;
 mod fonts;
 mod icons;
 mod modal;
 mod models;
 mod network_utils;
+mod server_utils;
 mod settings_utils;
 mod steamcmd_utils;
 
 use modal::Modal;
 use models::*;
 use uuid::Uuid;
+
+use crate::server_utils::{update_server, UpdateMode};
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -61,6 +67,9 @@ impl AppState {
 }
 
 #[derive(Debug, Clone)]
+pub enum AsyncNotification {}
+
+#[derive(Debug, Clone)]
 pub enum Message {
     FontLoaded(Result<String, font::Error>),
     RefreshIp(LocalIp),
@@ -92,9 +101,13 @@ pub enum Message {
     // Servers
     NewServer,
     EditServer(Uuid),
+    InstallServer(Uuid),
+    ServerUpdated(Uuid),
 
     // Keyboard and Mouse events
     Event(Event),
+    // Notifications
+    // AsyncNotification(AsyncNotification)
 }
 
 impl Application for AppState {
@@ -115,6 +128,7 @@ impl Application for AppState {
                 state: ServerState::default(),
             })
             .collect();
+
         (
             AppState {
                 global_settings,
@@ -193,18 +207,7 @@ impl Application for AppState {
             Message::CloseServerSettings(id) => {
                 self.mode = MainWindowMode::Servers;
                 if let Some(server_settings) = self.get_server_settings(id) {
-                    let _ = settings_utils::save_server_settings(
-                        &self.global_settings,
-                        &server_settings,
-                    )
-                    .map_err(|e| {
-                        error!(
-                            "Failed to save server settings for server {} ({}): {}",
-                            &server_settings.name,
-                            server_settings.id.to_string(),
-                            e.to_string()
-                        )
-                    });
+                    save_server_settings_with_error(&self.global_settings, server_settings)
                 }
                 Command::none()
             }
@@ -224,22 +227,27 @@ impl Application for AppState {
                 Command::none()
             }
             Message::SetServerInstallationDirectory(id) => {
-                if let Some(server_settings) = self.get_server_settings_mut(id) {
+                let folder = if let Some(server_settings) = self.get_server_settings(id) {
                     let default_path = server_settings.installation_location.as_str();
-                    let folder = rfd::FileDialog::new()
+                    rfd::FileDialog::new()
                         .set_title("Select server installation directory")
                         .set_directory(default_path)
-                        .pick_folder();
-                    if let Some(folder) = folder {
-                        if let Some(folder) = folder.to_str() {
-                            info!("Setting path: {}", folder);
-                            server_settings.installation_location = folder.into();
-                        } else {
-                            error!("Failed to convert folder");
-                        }
-                    } else {
-                        error!("No folder selected");
-                    }
+                        .pick_folder()
+                } else {
+                    None
+                };
+                if let Some(folder) = folder {
+                    info!("Setting path: {:?}", folder);
+                    // TODO: This is really clunky, too much interior mutability.
+                    self.get_server_settings_mut(id)
+                        .unwrap()
+                        .installation_location = folder.to_str().unwrap().into();
+                    save_server_settings_with_error(
+                        &self.global_settings,
+                        self.get_server_settings(id).unwrap(),
+                    )
+                } else {
+                    error!("No folder selected");
                 }
                 Command::none()
             }
@@ -345,8 +353,27 @@ impl Application for AppState {
                 self.mode = MainWindowMode::EditProfile;
                 let edit_server = self
                     .get_server_settings(id)
-                    .expect("Attempt to edit non-existant server");
+                    .expect("Failed to look up server settings");
                 self.global_state.edit_server_id = edit_server.id;
+                Command::none()
+            }
+            Message::InstallServer(id) => {
+                trace!("Install Server {}", id.to_string());
+                let server_settings = self
+                    .get_server_settings(id)
+                    .expect("Failed to look up server settings");
+                Command::perform(
+                    update_server(
+                        self.global_settings.steamcmd_directory.to_owned(),
+                        server_settings.get_full_installation_location(),
+                        "2430930",
+                        UpdateMode::Update,
+                    ),
+                    move |_| Message::ServerUpdated(id),
+                )
+            }
+            Message::ServerUpdated(id) => {
+                trace!("Server Updated {}", id.to_string());
                 Command::none()
             }
             Message::Event(_event) => Command::none(),

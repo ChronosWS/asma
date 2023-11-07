@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use static_init::dynamic;
-use tracing::trace;
+use tracing::{trace, error};
 
 use crate::models::{GlobalSettings, ServerSettings, ThemeType};
 
@@ -116,12 +116,31 @@ pub fn load_server_settings(global_settings: &GlobalSettings) -> Result<Vec<Serv
     Ok(result)
 }
 
+pub fn save_server_settings_with_error(
+    global_settings: &GlobalSettings,
+    server_settings: &ServerSettings,
+) {
+    let _ = save_server_settings(global_settings, server_settings).map_err(|e| {
+        error!(
+            "Failed to save server settings for server {} ({}): {}",
+            &server_settings.name,
+            server_settings.id.to_string(),
+            e.to_string()
+        )
+    });
+}
 pub fn save_server_settings(
     global_settings: &GlobalSettings,
     server_settings: &ServerSettings,
 ) -> Result<()> {
     let server_file = Path::new(&global_settings.profiles_directory)
         .join(format!("{}.json", server_settings.id.to_string()));
+    trace!(
+        "Save profile {} ({}) to {:?}",
+        server_settings.name,
+        server_settings.id,
+        server_file
+    );
     let server_settings = serde_json::to_string_pretty(server_settings)?;
     Ok(std::fs::write(server_file, server_settings)?)
 }

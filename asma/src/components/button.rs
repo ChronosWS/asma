@@ -1,6 +1,6 @@
 use iced::{
     widget::{button, image, row, text, Button},
-    Element,
+    Element, Alignment,
 };
 
 pub fn make_button<'a>(
@@ -14,9 +14,9 @@ pub fn make_button<'a>(
         row![
             image::Image::new(image).width(24).height(24),
             text(inner_text)
-                .height(24)
                 .vertical_alignment(iced::alignment::Vertical::Center)
         ]
+        .align_items(Alignment::Center)
         .spacing(5)
         .into()
     };

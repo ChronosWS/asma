@@ -4,7 +4,7 @@ use std::{io::Write, path::PathBuf};
 use tracing::{error, trace};
 
 // TODO: magic strings
-pub async fn get_steamcmd<S: AsRef<str>>(destination_path: S) -> Result<()> {
+pub async fn get_steamcmd(destination_path: impl AsRef<str>) -> Result<()> {
     let destination_path = destination_path.as_ref();
     trace!("Getting steamcmd to {}", destination_path);
     let mut zip_file_name = PathBuf::from(destination_path);
