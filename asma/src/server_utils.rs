@@ -1,6 +1,13 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Local};
 use regex::Regex;
-use std::{path::Path, process::Stdio};
+use serde::Deserialize;
+use std::{
+    fs::{FileType, Permissions},
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{ChildStdout, Command},
@@ -101,7 +108,7 @@ pub async fn update_server(
 
                         match state {
                             0x61 => {
-                                trace!("Downloading {}", percent);
+                                trace!("{}: SteamCMD: Downloading {}", server_id, percent);
                                 let _ = progress
                                     .send(AsyncNotification::UpdateServerProgress(
                                         server_id,
@@ -110,7 +117,7 @@ pub async fn update_server(
                                     .await;
                             }
                             0x81 => {
-                                trace!("Verifying {}", percent);
+                                trace!("{}: SteamCMD: Verifying {}", server_id, percent);
                                 let _ = progress
                                     .send(AsyncNotification::UpdateServerProgress(
                                         server_id,
@@ -119,20 +126,28 @@ pub async fn update_server(
                                     .await;
                             }
                             other => {
-                                warn!("Unknown steamcmd state: {} ({})", other, desc.as_str())
+                                warn!(
+                                    "{}: SteamCMD: Unknown state: {} ({})",
+                                    server_id,
+                                    other,
+                                    desc.as_str()
+                                )
                             }
                         }
                     }
                 } else {
-                    trace!("Line: {}", &line);
+                    trace!("{}: SteamCMD: {}", server_id, &line);
                 }
             }
             Ok(None) => {
-                trace!("Stream ended");
                 break;
             }
             Err(e) => {
-                error!("Error reading output: {}", e.to_string());
+                error!(
+                    "{}: SteamCMD: Error reading output: {}",
+                    server_id,
+                    e.to_string()
+                );
                 break;
             }
         }
@@ -147,10 +162,69 @@ pub async fn update_server(
 
 #[derive(Debug, Clone)]
 pub enum ValidationResult {
+    NotInstalled,
     Success(String),
-    Failed(String)
+    Failed(String),
 }
 
-pub async fn validate_server(id: Uuid, installation_dir: impl AsRef<str>) -> Result<ValidationResult> {
-    Ok(ValidationResult::Failed("Not implemented".into()))
+
+const STATE_INSTALL_SUCCESSFUL: u32 = 4;
+
+pub async fn validate_server(
+    id: Uuid,
+    installation_dir: impl AsRef<str>,
+    app_id: impl AsRef<str>,
+) -> Result<ValidationResult> {
+    // Verify the binary exists
+    let installation_dir = installation_dir.as_ref();
+    let base_path = PathBuf::from(installation_dir);
+
+    // Validate install state
+    let manifest_path = base_path.join(format!("steamapps/appmanifest_{}.acf", app_id.as_ref()));
+    match std::fs::read_to_string(manifest_path) {
+        Err(err) => match err.kind() {
+            ErrorKind::NotFound => {
+                trace!("{}: No appmanifest found", id);
+                return Ok(ValidationResult::NotInstalled)
+            }
+            _ => return Err(err.into()),
+        },
+        Ok(content) => {
+            let regex = Regex::new("StateFlags[^0-9]+(?<state>[0-9]+)")
+                .expect("Failed to build manifest searching regex");
+            let state_capture = content.lines().filter_map(|l| regex.captures(l)).next();
+            if let Some(state_capture) = state_capture {
+                let state_flags: u32 = state_capture
+                    .name("state")
+                    .expect("Failed to get named capture")
+                    .as_str()
+                    .parse()
+                    .with_context(|| "state flags failed to parse")?;
+                if state_flags != STATE_INSTALL_SUCCESSFUL {
+                    trace!("{}: Incomplete install (state = {})", id, state_flags);
+                    return Ok(ValidationResult::Failed("Incomplete".to_string()));
+                }
+            } else {
+                trace!("{}: appmanifest does not contain state information", id);
+                return Ok(ValidationResult::NotInstalled);
+            }
+        }
+    }
+
+    // Validate binary path
+    let binary_path = base_path.join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe");
+    let metadata = match std::fs::metadata(binary_path) {
+        Ok(metadata) => metadata,
+        Err(err) => match err.kind() {
+            ErrorKind::NotFound => {
+                trace!("{}: No binary found", id);
+                return Ok(ValidationResult::NotInstalled);
+            }
+            _ => return Err(err.into()),
+        },
+    };
+
+    let created_time: DateTime<Local> =
+        DateTime::from(metadata.created().with_context(|| "No Creation Time")?);
+    Ok(ValidationResult::Success(created_time.to_rfc3339()))
 }

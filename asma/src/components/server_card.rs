@@ -39,7 +39,7 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                     )
                     .width(Length::Fill),
                 ),
-                InstallState::UpdateStarting => container(text("Steam Update initializing...")),
+                InstallState::UpdateStarting => container(text("Steam update in progress...")),
                 InstallState::Downloading(progress) => {
                     container(text(format!("Steam Downloading: {}%...", progress)))
                 }
@@ -48,7 +48,7 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                 }
                 InstallState::Validating => container(text("Validating install...")),
                 InstallState::Installed(version) => {
-                    container(text(format!("Version: {}", version)))
+                    container(text(format!("Last Updated: {}", version)))
                 }
                 InstallState::FailedValidation(reason) => container(
                     row![

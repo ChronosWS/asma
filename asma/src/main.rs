@@ -171,11 +171,9 @@ impl Application for AppState {
             .map(|s| {
                 let id = s.id();
                 let install_location = s.settings.get_full_installation_location();
+                let app_id = global_settings.app_id.to_owned();
                 Command::perform(
-                    validate_server(
-                        id,
-                        install_location,
-                    ),
+                    validate_server(id, install_location, app_id),
                     move |result| {
                         result
                             .map(|r| Message::ServerValidated(id, r))
@@ -297,8 +295,13 @@ impl Application for AppState {
                 let server_settings = self
                     .get_server_settings(id)
                     .expect("Failed to look up server settings");
+                let app_id = self.global_settings.app_id.to_owned();
                 Command::perform(
-                    validate_server(id, server_settings.get_full_installation_location()),
+                    validate_server(
+                        id,
+                        server_settings.get_full_installation_location(),
+                        app_id,
+                    ),
                     move |result| {
                         result
                             .map(|r| Message::ServerValidated(id, r))
@@ -317,6 +320,14 @@ impl Application for AppState {
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
                 server_state.install_state = InstallState::Installed(version);
+                Command::none()
+            }
+            Message::ServerValidated(id, ValidationResult::NotInstalled) => {
+                trace!("Server not installed {}", id.to_string());
+                let server_state = self
+                    .get_server_state_mut(id)
+                    .expect("Failed to look up server state");
+                server_state.install_state = InstallState::NotInstalled;
                 Command::none()
             }
             Message::ServerValidated(id, ValidationResult::Failed(reason)) => {
@@ -340,7 +351,6 @@ impl Application for AppState {
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
-                trace!("Server Progress: {:?}", progress);
                 match progress {
                     UpdateServerProgress::Initializing => {
                         server_state.install_state = InstallState::UpdateStarting

@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use static_init::dynamic;
-use tracing::{trace, error};
+use tracing::{error, trace};
 
 use crate::models::{GlobalSettings, ServerSettings, ThemeType};
 
@@ -39,7 +39,8 @@ pub fn default_global_settings() -> GlobalSettings {
         app_data_directory: default_app_data_directory.to_str().unwrap().into(),
         profiles_directory: default_profile_directory.to_str().unwrap().into(),
         steamcmd_directory: default_steamcmd_directory.to_str().unwrap().into(),
-        steam_api_key: String::new()
+        steam_api_key: String::new(),
+        app_id: "2430930".into(),
     }
 }
 
@@ -68,7 +69,11 @@ fn get_default_global_settings_path() -> PathBuf {
 fn load_global_settings_from(path: impl AsRef<str>) -> Result<GlobalSettings> {
     trace!("Trying to loading global settings from {}", path.as_ref());
     let global_settings = std::fs::read_to_string(path.as_ref())?;
-    let mut global_settings: GlobalSettings = serde_json::from_str(&global_settings)?;
+    let mut global_settings: GlobalSettings =
+        serde_json::from_str(&global_settings).map_err(|e| {
+            error!("Failed to deserialize global settings: {}", e.to_string());
+            e
+        })?;
     global_settings.app_data_directory = Path::new(path.as_ref())
         .parent()
         .expect("Failed to get parent of global settings file")

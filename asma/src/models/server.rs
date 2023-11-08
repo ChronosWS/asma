@@ -3,6 +3,8 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+// WARNING: If you add non-Optional values here, you must give them defaults or you
+//          will break manifest loading
 #[derive(Serialize, Deserialize)]
 pub struct ServerSettings {
     pub id: Uuid,
