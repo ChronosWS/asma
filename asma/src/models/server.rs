@@ -33,7 +33,9 @@ pub enum InstallState {
     UpdateStarting,
     Downloading(f32),
     Verifying(f32),
+    Validating,
     Installed(String),
+    FailedValidation(String)
 }
 
 pub struct ServerState {

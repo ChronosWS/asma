@@ -144,3 +144,13 @@ pub async fn update_server(
         .map(|_| ())
         .with_context(|| "steam_cmd failed")
 }
+
+#[derive(Debug, Clone)]
+pub enum ValidationResult {
+    Success(String),
+    Failed(String)
+}
+
+pub async fn validate_server(id: Uuid, installation_dir: impl AsRef<str>) -> Result<ValidationResult> {
+    Ok(ValidationResult::Failed("Not implemented".into()))
+}

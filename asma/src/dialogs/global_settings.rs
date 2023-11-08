@@ -4,7 +4,7 @@ use iced::{
     widget::{
         self, column, container, horizontal_space, row, text, text_input, toggler, Container,
     },
-    Command, Length,
+    Command, Length, Alignment,
 };
 use tracing::{error, info, trace};
 
@@ -171,6 +171,7 @@ pub fn make_dialog(global_settings: &GlobalSettings) -> Container<Message> {
                 })
                 .width(Length::Shrink),
             ]
+            .align_items(Alignment::Center)
             .spacing(5)
             .height(32),
             row![
@@ -200,6 +201,7 @@ pub fn make_dialog(global_settings: &GlobalSettings) -> Container<Message> {
                 )
                 .width(150),
             ]
+            .align_items(Alignment::Center)
             .spacing(5),
             row![
                 text("Steam API Key:")
@@ -209,6 +211,7 @@ pub fn make_dialog(global_settings: &GlobalSettings) -> Container<Message> {
                     .width(Length::Fill)
                     .on_input(|v| GlobalSettingsMessage::SetSteamApiKey(v).into()),
             ]
+            .align_items(Alignment::Center)
             .spacing(5),
             row![
                 text("Profiles:")
@@ -230,6 +233,7 @@ pub fn make_dialog(global_settings: &GlobalSettings) -> Container<Message> {
                 )
                 .width(150),
             ]
+            .align_items(Alignment::Center)
             .spacing(5)
         ]
         .spacing(5),

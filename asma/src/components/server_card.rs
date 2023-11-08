@@ -3,7 +3,9 @@ use iced::{
     Alignment, Background, BorderRadius, Color, Element, Length, Theme,
 };
 
-use crate::{file_utils, icons, models::*, Message, dialogs::server_settings::ServerSettingsMessage};
+use crate::{
+    dialogs::server_settings::ServerSettingsMessage, file_utils, icons, models::*, Message,
+};
 
 use super::make_button;
 
@@ -26,20 +28,39 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
             ))
         } else {
             match &server.state.install_state {
-                InstallState::NotInstalled => container(make_button(
-                    format!(
-                        "Install to: {}",
-                        server.settings.get_full_installation_location()
-                    ),
-                    Message::InstallServer(server.id()),
-                    icons::DOWNLOAD.clone(),
-                ).width(Length::Fill)),
-                InstallState::UpdateStarting => container(text("Update initializing...")),
-                InstallState::Downloading(progress) => container(text(format!("Downloading: {}%...", progress))),
-                InstallState::Verifying(progress) => container(text(format!("Verofying: {}%...", progress))),
+                InstallState::NotInstalled => container(
+                    make_button(
+                        format!(
+                            "Install to: {}",
+                            server.settings.get_full_installation_location()
+                        ),
+                        Message::InstallServer(server.id()),
+                        icons::DOWNLOAD.clone(),
+                    )
+                    .width(Length::Fill),
+                ),
+                InstallState::UpdateStarting => container(text("Steam Update initializing...")),
+                InstallState::Downloading(progress) => {
+                    container(text(format!("Steam Downloading: {}%...", progress)))
+                }
+                InstallState::Verifying(progress) => {
+                    container(text(format!("Steam Verifying: {}%...", progress)))
+                }
+                InstallState::Validating => container(text("Validating install...")),
                 InstallState::Installed(version) => {
                     container(text(format!("Version: {}", version)))
                 }
+                InstallState::FailedValidation(reason) => container(
+                    row![
+                        text(format!("Validation failed: {}", reason)).width(Length::Fill),
+                        make_button(
+                            "Re-install",
+                            Message::InstallServer(server.id()),
+                            icons::DOWNLOAD.clone(),
+                        )
+                    ]
+                    .align_items(Alignment::Center),
+                ),
             }
         };
 
@@ -62,6 +83,7 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
         ]
         .spacing(5),
     )
+    .padding(5)
     .style(server_card_style)
     .into()
 }

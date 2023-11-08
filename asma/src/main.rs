@@ -10,9 +10,9 @@ use iced::{
     Subscription, Theme,
 };
 
-use server_utils::UpdateServerProgress;
+use server_utils::{UpdateServerProgress, ValidationResult};
 use tokio::sync::mpsc::{channel, Sender};
-use tracing::{error, trace, Level};
+use tracing::{error, trace, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod components;
@@ -31,7 +31,7 @@ use modal::Modal;
 use models::*;
 use uuid::Uuid;
 
-use crate::server_utils::{update_server, UpdateMode};
+use crate::server_utils::{update_server, validate_server, UpdateMode};
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -86,6 +86,7 @@ pub enum Message {
     FontLoaded(Result<String, font::Error>),
     RefreshIp(LocalIp),
 
+    // Dialogs
     GlobalSettings(GlobalSettingsMessage),
     ServerSettings(ServerSettingsMessage),
 
@@ -94,6 +95,7 @@ pub enum Message {
     EditServer(Uuid),
     InstallServer(Uuid),
     ServerUpdated(Uuid),
+    ServerValidated(Uuid, ValidationResult),
 
     // Keyboard and Mouse events
     Event(Event),
@@ -150,7 +152,45 @@ impl Application for AppState {
                 settings,
                 state: ServerState::default(),
             })
+            .collect::<Vec<_>>();
+
+        let mut startup_commands = vec![
+            font::load(std::borrow::Cow::from(arial_bytes))
+                .map(|v| Message::FontLoaded(v.map(|_| "Arial".into()))),
+            Command::perform(network_utils::refresh_ip(), |result| {
+                if let Ok(ip_addr) = result {
+                    Message::RefreshIp(LocalIp::Resolved(ip_addr))
+                } else {
+                    Message::RefreshIp(LocalIp::Failed)
+                }
+            }),
+        ];
+
+        let mut validation_commands = servers
+            .iter()
+            .map(|s| {
+                let id = s.id();
+                let install_location = s.settings.get_full_installation_location();
+                Command::perform(
+                    validate_server(
+                        id,
+                        install_location,
+                    ),
+                    move |result| {
+                        result
+                            .map(|r| Message::ServerValidated(id, r))
+                            .unwrap_or_else(|e| {
+                                Message::ServerValidated(
+                                    id,
+                                    ValidationResult::Failed(e.to_string()),
+                                )
+                            })
+                    },
+                )
+            })
             .collect();
+
+        startup_commands.append(&mut validation_commands);
 
         (
             AppState {
@@ -164,17 +204,7 @@ impl Application for AppState {
                 servers,
                 mode: MainWindowMode::Servers,
             },
-            Command::batch(vec![
-                font::load(std::borrow::Cow::from(arial_bytes))
-                    .map(|v| Message::FontLoaded(v.map(|_| "Arial".into()))),
-                Command::perform(network_utils::refresh_ip(), |result| {
-                    if let Ok(ip_addr) = result {
-                        Message::RefreshIp(LocalIp::Resolved(ip_addr))
-                    } else {
-                        Message::RefreshIp(LocalIp::Failed)
-                    }
-                }),
-            ]),
+            Command::batch(startup_commands),
         )
     }
 
@@ -263,7 +293,40 @@ impl Application for AppState {
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
-                server_state.install_state = InstallState::Installed("<unknown>".into());
+                server_state.install_state = InstallState::Validating;
+                let server_settings = self
+                    .get_server_settings(id)
+                    .expect("Failed to look up server settings");
+                Command::perform(
+                    validate_server(id, server_settings.get_full_installation_location()),
+                    move |result| {
+                        result
+                            .map(|r| Message::ServerValidated(id, r))
+                            .unwrap_or_else(|e| {
+                                Message::ServerValidated(
+                                    id,
+                                    ValidationResult::Failed(e.to_string()),
+                                )
+                            })
+                    },
+                )
+            }
+            Message::ServerValidated(id, ValidationResult::Success(version)) => {
+                trace!("Server Validated {}", id.to_string());
+                let server_state = self
+                    .get_server_state_mut(id)
+                    .expect("Failed to look up server state");
+                server_state.install_state = InstallState::Installed(version);
+                Command::none()
+            }
+            Message::ServerValidated(id, ValidationResult::Failed(reason)) => {
+                warn!("Server Validation Failed {}", id.to_string());
+                let server_state = self
+                    .get_server_state_mut(id)
+                    .expect("Failed to look up server state");
+                // TODO: We might want a better status here so we can show something on the card about
+                // validation failing, otherwise it might look like the server is gone
+                server_state.install_state = InstallState::FailedValidation(reason);
                 Command::none()
             }
             Message::Event(_event) => Command::none(),
