@@ -9,6 +9,8 @@ build = "build.rs"
 
 [dependencies]
 anyhow = "1.0.75"
+#conpty = "0.5.1"
+conpty = { path = "../../conpty" }
 # For .ico support
 # image = { version = "0.24.0", default-features = false, features = [ "ico" ] }
 static_init = "1.0.3"
@@ -19,8 +21,9 @@ serde_json = "1.0.108"
 uuid = { version = "1.5.0", features = [ "v4", "serde" ] }
 futures-util = "0.3.29"
 process_path = "0.1.4"
+regex = "1.10.2"
 reqwest = { version = "0.11", features = ["json", "stream" ] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.33.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.17", features = [ "env-filter"] }
 #slint = "1.2.2"

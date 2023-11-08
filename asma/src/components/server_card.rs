@@ -34,11 +34,12 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                     Message::InstallServer(server.id()),
                     icons::DOWNLOAD.clone(),
                 ).width(Length::Fill)),
-                InstallState::Installing => container(text("Installing...")),
+                InstallState::UpdateStarting => container(text("Update initializing...")),
+                InstallState::Downloading(progress) => container(text(format!("Downloading: {}%...", progress))),
+                InstallState::Verifying(progress) => container(text(format!("Verofying: {}%...", progress))),
                 InstallState::Installed(version) => {
                     container(text(format!("Version: {}", version)))
                 }
-                InstallState::Updating => container(text("Updating...")),
             }
         };
 

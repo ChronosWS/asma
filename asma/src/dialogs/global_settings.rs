@@ -1,7 +1,7 @@
 use iced::{
     alignment::Vertical,
     theme,
-    widget::{column, container, horizontal_space, row, text, toggler, Container},
+    widget::{column, container, horizontal_space, row, text, text_input, toggler, Container},
     Length,
 };
 
@@ -46,7 +46,7 @@ pub fn global_settings(global_settings: &GlobalSettings) -> Container<Message> {
             .height(32),
             row![
                 text("SteamCMD:")
-                    .width(100)
+                    .width(150)
                     .vertical_alignment(Vertical::Center),
                 text(global_settings.steamcmd_directory.to_owned())
                     .vertical_alignment(Vertical::Center)
@@ -73,8 +73,17 @@ pub fn global_settings(global_settings: &GlobalSettings) -> Container<Message> {
             ]
             .spacing(5),
             row![
+                text("Steam API Key:")
+                    .width(150)
+                    .vertical_alignment(Vertical::Center),
+                text_input("Enter Steam API Key", &global_settings.steam_api_key)
+                    .width(Length::Fill)
+                    .on_input(Message::SetSteamApiKey),
+            ]
+            .spacing(5),
+            row![
                 text("Profiles:")
-                    .width(100)
+                    .width(150)
                     .vertical_alignment(Vertical::Center),
                 text(global_settings.profiles_directory.to_owned())
                     .vertical_alignment(Vertical::Center),

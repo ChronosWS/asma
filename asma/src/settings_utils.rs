@@ -39,6 +39,7 @@ pub fn default_global_settings() -> GlobalSettings {
         app_data_directory: default_app_data_directory.to_str().unwrap().into(),
         profiles_directory: default_profile_directory.to_str().unwrap().into(),
         steamcmd_directory: default_steamcmd_directory.to_str().unwrap().into(),
+        steam_api_key: String::new()
     }
 }
 

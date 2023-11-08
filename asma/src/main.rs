@@ -1,5 +1,6 @@
 use components::{make_button, server_card};
 use fonts::{get_system_font_bytes, BOLD_FONT};
+use futures_util::SinkExt;
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{self, column, container, horizontal_rule, row, scrollable, text};
 use iced::{
@@ -7,9 +8,10 @@ use iced::{
     Subscription, Theme,
 };
 
+use server_utils::UpdateServerProgress;
 use settings_utils::save_server_settings_with_error;
 use steamcmd_utils::get_steamcmd;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{channel, Sender};
 use tracing::{error, info, trace, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
@@ -45,6 +47,7 @@ enum MainWindowMode {
 }
 
 struct AppState {
+    async_sender: Option<Sender<AsyncNotification>>,
     global_settings: GlobalSettings,
     global_state: GlobalState,
     servers: Vec<Server>,
@@ -64,10 +67,19 @@ impl AppState {
             .find(|s| s.settings.id == id)
             .map(|s| &mut s.settings)
     }
+    pub fn get_server_state_mut(&mut self, id: Uuid) -> Option<&mut ServerState> {
+        self.servers
+            .iter_mut()
+            .find(|s| s.settings.id == id)
+            .map(|s| &mut s.state)
+    }
 }
 
 #[derive(Debug, Clone)]
-pub enum AsyncNotification {}
+pub enum AsyncNotification {
+    AsyncStarted(Sender<AsyncNotification>),
+    UpdateServerProgress(Uuid, UpdateServerProgress),
+}
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -97,6 +109,7 @@ pub enum Message {
     UpdateSteamCmd,
     SetSteamCmdDirectory,
     SteamCmdUpdated,
+    SetSteamApiKey(String),
 
     // Servers
     NewServer,
@@ -107,7 +120,26 @@ pub enum Message {
     // Keyboard and Mouse events
     Event(Event),
     // Notifications
-    // AsyncNotification(AsyncNotification)
+    AsyncNotification(AsyncNotification),
+}
+
+fn async_pump() -> Subscription<AsyncNotification> {
+    struct Worker;
+    subscription::channel(
+        std::any::TypeId::of::<Worker>(),
+        100,
+        |mut output| async move {
+            let (sender, mut receiver) = channel(100);
+            let _ = output.send(AsyncNotification::AsyncStarted(sender)).await;
+            loop {
+                if let Some(message) = receiver.recv().await {
+                    let _ = output.send(message).await;
+                } else {
+                    trace!("Async pump completed.");
+                }
+            }
+        },
+    )
 }
 
 impl Application for AppState {
@@ -131,6 +163,7 @@ impl Application for AppState {
 
         (
             AppState {
+                async_sender: None,
                 global_settings,
                 global_state: GlobalState {
                     app_version: env!("CARGO_PKG_VERSION").into(),
@@ -169,7 +202,10 @@ impl Application for AppState {
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
-        subscription::events().map(Message::Event)
+        Subscription::batch([
+            subscription::events().map(Message::Event),
+            async_pump().map(Message::AsyncNotification),
+        ])
     }
 
     fn update(&mut self, message: Message) -> iced::Command<Message> {
@@ -268,6 +304,10 @@ impl Application for AppState {
                 }
                 Command::none()
             }
+            Message::SetSteamApiKey(key) => {
+                self.global_settings.steam_api_key = key;
+                Command::none()
+            }
             Message::ThemeToggled(is_dark) => {
                 if is_dark {
                     self.global_settings.theme = ThemeType::Dark;
@@ -364,19 +404,45 @@ impl Application for AppState {
                     .expect("Failed to look up server settings");
                 Command::perform(
                     update_server(
+                        id,
                         self.global_settings.steamcmd_directory.to_owned(),
                         server_settings.get_full_installation_location(),
                         "2430930",
                         UpdateMode::Update,
+                        self.async_sender.as_ref().unwrap().clone(),
                     ),
                     move |_| Message::ServerUpdated(id),
                 )
             }
             Message::ServerUpdated(id) => {
                 trace!("Server Updated {}", id.to_string());
+                let server_state = self
+                    .get_server_state_mut(id)
+                    .expect("Failed to look up server state");
+                server_state.install_state = InstallState::Installed("<unknown>".into());
                 Command::none()
             }
             Message::Event(_event) => Command::none(),
+            // TODO: Extract these to a different location
+            Message::AsyncNotification(AsyncNotification::AsyncStarted(sender)) => {
+                trace!("Async notification pipe established");
+                self.async_sender = Some(sender);
+                Command::none()
+            }
+            Message::AsyncNotification(AsyncNotification::UpdateServerProgress(id, progress))
+             => {
+                let server_state = self
+                    .get_server_state_mut(id)
+                    .expect("Failed to look up server state");
+                trace!("Server Progress: {:?}", progress);
+                match progress {
+                    UpdateServerProgress::Initializing => server_state.install_state = InstallState::UpdateStarting,
+                    UpdateServerProgress::Downloading(progress) => server_state.install_state = InstallState::Downloading(progress),
+                    UpdateServerProgress::Verifying(progress) => server_state.install_state = InstallState::Verifying(progress),
+                }
+
+                Command::none()
+            }
         }
     }
 

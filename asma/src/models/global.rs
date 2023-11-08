@@ -8,6 +8,7 @@ pub struct GlobalSettings {
     pub theme: ThemeType,
     pub profiles_directory: String,
     pub steamcmd_directory: String,
+    pub steam_api_key: String,
 
     // Transient settings
     #[serde(skip)]

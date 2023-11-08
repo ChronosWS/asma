@@ -30,9 +30,10 @@ pub enum RunState {
 
 pub enum InstallState {
     NotInstalled,
-    Installing,
+    UpdateStarting,
+    Downloading(f32),
+    Verifying(f32),
     Installed(String),
-    Updating,
 }
 
 pub struct ServerState {
