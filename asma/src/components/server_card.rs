@@ -3,7 +3,7 @@ use iced::{
     Alignment, Background, BorderRadius, Color, Element, Length, Theme,
 };
 
-use crate::{file_utils, icons, models::*, Message};
+use crate::{file_utils, icons, models::*, Message, dialogs::server_settings::ServerSettingsMessage};
 
 use super::make_button;
 
@@ -21,7 +21,7 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
         if !file_utils::directory_exists(&server.settings.installation_location) {
             container(make_button(
                 "Set Install Location...",
-                Message::SetServerInstallationDirectory(server.id()),
+                ServerSettingsMessage::SetServerInstallationDirectory(server.id()).into(),
                 icons::FOLDER_OPEN.clone(),
             ))
         } else {

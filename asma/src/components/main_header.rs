@@ -3,7 +3,7 @@ use iced::{
     Alignment, Length,
 };
 
-use crate::{icons, models::GlobalState, Message};
+use crate::{dialogs::global_settings::GlobalSettingsMessage, icons, models::GlobalState, Message};
 
 use super::make_button;
 
@@ -15,7 +15,7 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
                 .vertical_alignment(iced::alignment::Vertical::Top),
             make_button(
                 "Global Settings...",
-                Message::OpenGlobalSettings,
+                Message::GlobalSettings(GlobalSettingsMessage::OpenGlobalSettings),
                 icons::SETTINGS.clone()
             )
         ],

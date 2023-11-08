@@ -1,18 +1,18 @@
 use components::{make_button, server_card};
+use dialogs::global_settings::{self, GlobalSettingsMessage};
+use dialogs::server_settings::{self, ServerSettingsMessage};
 use fonts::{get_system_font_bytes, BOLD_FONT};
 use futures_util::SinkExt;
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{self, column, container, horizontal_rule, row, scrollable, text};
+use iced::widget::{column, container, horizontal_rule, row, scrollable, text};
 use iced::{
     executor, font, subscription, Application, Color, Command, Element, Event, Length, Settings,
     Subscription, Theme,
 };
 
 use server_utils::UpdateServerProgress;
-use settings_utils::save_server_settings_with_error;
-use steamcmd_utils::get_steamcmd;
 use tokio::sync::mpsc::{channel, Sender};
-use tracing::{error, info, trace, Level};
+use tracing::{error, trace, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod components;
@@ -86,30 +86,8 @@ pub enum Message {
     FontLoaded(Result<String, font::Error>),
     RefreshIp(LocalIp),
 
-    // Global Settings
-    OpenGlobalSettings,
-    CloseGlobalSettings,
-
-    // Server Settings
-    CloseServerSettings(Uuid),
-    ServerSetName(Uuid, String),
-    OpenServerInstallationDirectory(Uuid),
-    SetServerInstallationDirectory(Uuid),
-
-    // Theme
-    ThemeToggled(bool),
-    DebugUIToggled(bool),
-
-    // Profiles
-    OpenProfilesDirectory,
-    SetProfilesDirectory,
-
-    // Steam Messages
-    OpenSteamCmdDirectory,
-    UpdateSteamCmd,
-    SetSteamCmdDirectory,
-    SteamCmdUpdated,
-    SetSteamApiKey(String),
+    GlobalSettings(GlobalSettingsMessage),
+    ServerSettings(ServerSettingsMessage),
 
     // Servers
     NewServer,
@@ -119,8 +97,21 @@ pub enum Message {
 
     // Keyboard and Mouse events
     Event(Event),
+
     // Notifications
     AsyncNotification(AsyncNotification),
+}
+
+impl From<GlobalSettingsMessage> for Message {
+    fn from(value: GlobalSettingsMessage) -> Self {
+        Message::GlobalSettings(value)
+    }
+}
+
+impl From<ServerSettingsMessage> for Message {
+    fn from(value: ServerSettingsMessage) -> Self {
+        Message::ServerSettings(value)
+    }
 }
 
 fn async_pump() -> Subscription<AsyncNotification> {
@@ -224,155 +215,8 @@ impl Application for AppState {
 
                 Command::none()
             }
-            Message::OpenGlobalSettings => {
-                self.mode = MainWindowMode::GlobalSettings;
-                widget::focus_next()
-            }
-            Message::CloseGlobalSettings => {
-                self.mode = MainWindowMode::Servers;
-                let _ = settings_utils::save_global_settings(&self.global_settings)
-                    .map_err(|e| error!("Failed to save global settings: {}", e.to_string()));
-                Command::none()
-            }
-            Message::ServerSetName(id, name) => {
-                if let Some(server_settings) = self.get_server_settings_mut(id) {
-                    server_settings.name = name;
-                }
-                Command::none()
-            }
-            Message::CloseServerSettings(id) => {
-                self.mode = MainWindowMode::Servers;
-                if let Some(server_settings) = self.get_server_settings(id) {
-                    save_server_settings_with_error(&self.global_settings, server_settings)
-                }
-                Command::none()
-            }
-            Message::OpenServerInstallationDirectory(id) => {
-                if let Some(server_settings) = self.get_server_settings(id) {
-                    if let Err(e) = std::process::Command::new("explorer")
-                        .args([server_settings.installation_location.as_str()])
-                        .spawn()
-                    {
-                        error!(
-                            "Failed to open {}: {}",
-                            server_settings.installation_location,
-                            e.to_string()
-                        );
-                    }
-                }
-                Command::none()
-            }
-            Message::SetServerInstallationDirectory(id) => {
-                let folder = if let Some(server_settings) = self.get_server_settings(id) {
-                    let default_path = server_settings.installation_location.as_str();
-                    rfd::FileDialog::new()
-                        .set_title("Select server installation directory")
-                        .set_directory(default_path)
-                        .pick_folder()
-                } else {
-                    None
-                };
-                if let Some(folder) = folder {
-                    info!("Setting path: {:?}", folder);
-                    // TODO: This is really clunky, too much interior mutability.
-                    self.get_server_settings_mut(id)
-                        .unwrap()
-                        .installation_location = folder.to_str().unwrap().into();
-                    save_server_settings_with_error(
-                        &self.global_settings,
-                        self.get_server_settings(id).unwrap(),
-                    )
-                } else {
-                    error!("No folder selected");
-                }
-                Command::none()
-            }
-            Message::UpdateSteamCmd => Command::perform(
-                get_steamcmd(self.global_settings.steamcmd_directory.to_owned()),
-                |_| Message::SteamCmdUpdated,
-            ),
-            Message::OpenSteamCmdDirectory => {
-                if let Err(e) = std::process::Command::new("explorer")
-                    .args([self.global_settings.steamcmd_directory.as_str()])
-                    .spawn()
-                {
-                    error!(
-                        "Failed to open {}: {}",
-                        self.global_settings.steamcmd_directory,
-                        e.to_string()
-                    );
-                }
-                Command::none()
-            }
-            Message::SetSteamApiKey(key) => {
-                self.global_settings.steam_api_key = key;
-                Command::none()
-            }
-            Message::ThemeToggled(is_dark) => {
-                if is_dark {
-                    self.global_settings.theme = ThemeType::Dark;
-                } else {
-                    self.global_settings.theme = ThemeType::Light;
-                }
-                Command::none()
-            }
-            Message::DebugUIToggled(enable) => {
-                self.global_settings.debug_ui = enable;
-                Command::none()
-            }
-            Message::SetSteamCmdDirectory => {
-                let default_path = self.global_settings.steamcmd_directory.as_str();
-                let folder = rfd::FileDialog::new()
-                    .set_title("Select SteamCMD directory")
-                    .set_directory(default_path)
-                    .pick_folder();
-                if let Some(folder) = folder {
-                    if let Some(folder) = folder.to_str() {
-                        info!("Setting path: {}", folder);
-                        self.global_settings.steamcmd_directory = folder.into();
-                    } else {
-                        error!("Failed to convert folder");
-                    }
-                } else {
-                    error!("No folder selected");
-                }
-                Command::none()
-            }
-            Message::SteamCmdUpdated => {
-                trace!("SteamCmdUpdated");
-                Command::none()
-            }
-            Message::OpenProfilesDirectory => {
-                if let Err(e) = std::process::Command::new("explorer")
-                    .args([self.global_settings.profiles_directory.as_str()])
-                    .spawn()
-                {
-                    error!(
-                        "Failed to open {}: {}",
-                        self.global_settings.profiles_directory,
-                        e.to_string()
-                    );
-                }
-                Command::none()
-            }
-            Message::SetProfilesDirectory => {
-                let default_path = self.global_settings.profiles_directory.as_str();
-                let folder = rfd::FileDialog::new()
-                    .set_title("Select SteamCMD directory")
-                    .set_directory(default_path)
-                    .pick_folder();
-                if let Some(folder) = folder {
-                    if let Some(folder) = folder.to_str() {
-                        info!("Setting path: {}", folder);
-                        self.global_settings.profiles_directory = folder.into();
-                    } else {
-                        error!("Failed to convert folder");
-                    }
-                } else {
-                    error!("No folder selected");
-                }
-                Command::none()
-            }
+            Message::GlobalSettings(message) => global_settings::update(self, message),
+            Message::ServerSettings(message) => server_settings::update(self, message),
             Message::NewServer => {
                 trace!("TODO: New Server");
                 self.mode = MainWindowMode::EditProfile;
@@ -429,16 +273,21 @@ impl Application for AppState {
                 self.async_sender = Some(sender);
                 Command::none()
             }
-            Message::AsyncNotification(AsyncNotification::UpdateServerProgress(id, progress))
-             => {
+            Message::AsyncNotification(AsyncNotification::UpdateServerProgress(id, progress)) => {
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
                 trace!("Server Progress: {:?}", progress);
                 match progress {
-                    UpdateServerProgress::Initializing => server_state.install_state = InstallState::UpdateStarting,
-                    UpdateServerProgress::Downloading(progress) => server_state.install_state = InstallState::Downloading(progress),
-                    UpdateServerProgress::Verifying(progress) => server_state.install_state = InstallState::Verifying(progress),
+                    UpdateServerProgress::Initializing => {
+                        server_state.install_state = InstallState::UpdateStarting
+                    }
+                    UpdateServerProgress::Downloading(progress) => {
+                        server_state.install_state = InstallState::Downloading(progress)
+                    }
+                    UpdateServerProgress::Verifying(progress) => {
+                        server_state.install_state = InstallState::Verifying(progress)
+                    }
                 }
 
                 Command::none()
@@ -488,17 +337,20 @@ impl Application for AppState {
             MainWindowMode::Servers => main_content.into(),
             MainWindowMode::GlobalSettings => Modal::new(
                 main_content,
-                dialogs::global_settings(&self.global_settings),
+                dialogs::global_settings::make_dialog(&self.global_settings),
             )
-            .on_blur(Message::CloseGlobalSettings)
+            .on_blur(GlobalSettingsMessage::CloseGlobalSettings.into())
             .into(),
             MainWindowMode::EditProfile => {
                 let server_settings = self
                     .get_server_settings(self.global_state.edit_server_id)
                     .expect("Non-existant server requested for edit");
-                Modal::new(main_content, dialogs::server_settings(server_settings))
-                    .on_blur(Message::CloseServerSettings(server_settings.id))
-                    .into()
+                Modal::new(
+                    main_content,
+                    dialogs::server_settings::make_dialog(server_settings),
+                )
+                .on_blur(ServerSettingsMessage::CloseServerSettings(server_settings.id).into())
+                .into()
             }
         };
         if self.global_settings.debug_ui {

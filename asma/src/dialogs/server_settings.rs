@@ -2,12 +2,79 @@ use iced::{
     alignment::Vertical,
     theme,
     widget::{column, container, horizontal_space, row, text, text_input, Container},
-    Length,
+    Length, Command,
 };
+use tracing::{info, error};
+use uuid::Uuid;
 
-use crate::{components::make_button, icons, models::ServerSettings, Message};
+use crate::{components::make_button, icons, models::ServerSettings, Message, AppState, MainWindowMode, settings_utils::save_server_settings_with_error};
 
-pub fn server_settings(server_settings: &ServerSettings) -> Container<Message> {
+#[derive(Debug, Clone)]
+pub enum ServerSettingsMessage {
+    CloseServerSettings(Uuid),
+    ServerSetName(Uuid, String),
+    OpenServerInstallationDirectory(Uuid),
+    SetServerInstallationDirectory(Uuid),
+}
+
+pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -> Command<Message> {
+    match message {
+        ServerSettingsMessage::ServerSetName(id, name) => {
+            if let Some(server_settings) = app_state.get_server_settings_mut(id) {
+                server_settings.name = name;
+            }
+            Command::none()
+        }
+        ServerSettingsMessage::CloseServerSettings(id) => {
+            app_state.mode = MainWindowMode::Servers;
+            if let Some(server_settings) = app_state.get_server_settings(id) {
+                save_server_settings_with_error(&app_state.global_settings, server_settings)
+            }
+            Command::none()
+        }
+        ServerSettingsMessage::OpenServerInstallationDirectory(id) => {
+            if let Some(server_settings) = app_state.get_server_settings(id) {
+                if let Err(e) = std::process::Command::new("explorer")
+                    .args([server_settings.installation_location.as_str()])
+                    .spawn()
+                {
+                    error!(
+                        "Failed to open {}: {}",
+                        server_settings.installation_location,
+                        e.to_string()
+                    );
+                }
+            }
+            Command::none()
+        }
+        ServerSettingsMessage::SetServerInstallationDirectory(id) => {
+            let folder = if let Some(server_settings) = app_state.get_server_settings(id) {
+                let default_path = server_settings.installation_location.as_str();
+                rfd::FileDialog::new()
+                    .set_title("Select server installation directory")
+                    .set_directory(default_path)
+                    .pick_folder()
+            } else {
+                None
+            };
+            if let Some(folder) = folder {
+                info!("Setting path: {:?}", folder);
+                // TODO: This is really clunky, too much interior mutability.
+                app_state.get_server_settings_mut(id)
+                    .unwrap()
+                    .installation_location = folder.to_str().unwrap().into();
+                save_server_settings_with_error(
+                    &app_state.global_settings,
+                    app_state.get_server_settings(id).unwrap(),
+                )
+            } else {
+                error!("No folder selected");
+            }
+            Command::none()
+        }
+    }
+}
+pub fn make_dialog(server_settings: &ServerSettings) -> Container<Message> {
     container(
         column![
             row![
@@ -15,7 +82,7 @@ pub fn server_settings(server_settings: &ServerSettings) -> Container<Message> {
                 horizontal_space(Length::Fill),
                 make_button(
                     "",
-                    Message::CloseServerSettings(server_settings.id),
+                    ServerSettingsMessage::CloseServerSettings(server_settings.id).into(),
                     icons::SAVE.clone()
                 )
             ],
@@ -27,7 +94,7 @@ pub fn server_settings(server_settings: &ServerSettings) -> Container<Message> {
                     .width(100)
                     .vertical_alignment(Vertical::Center),
                 text_input("Server Name", &server_settings.name)
-                    .on_input(|v| Message::ServerSetName(server_settings.id, v)),
+                    .on_input(|v| ServerSettingsMessage::ServerSetName(server_settings.id, v).into()),
                 horizontal_space(Length::Fill),
             ]
             .spacing(5),
@@ -40,13 +107,13 @@ pub fn server_settings(server_settings: &ServerSettings) -> Container<Message> {
                 horizontal_space(Length::Fill),
                 make_button(
                     "Open...",
-                    Message::OpenServerInstallationDirectory(server_settings.id),
+                    ServerSettingsMessage::OpenServerInstallationDirectory(server_settings.id).into(),
                     icons::FOLDER_OPEN.clone()
                 )
                 .width(100),
                 make_button(
                     "Set Location...",
-                    Message::SetServerInstallationDirectory(server_settings.id),
+                    ServerSettingsMessage::SetServerInstallationDirectory(server_settings.id).into(),
                     icons::FOLDER_OPEN.clone()
                 )
                 .width(150),
