@@ -151,7 +151,6 @@ name = "asma"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "conpty",
  "futures-util",
  "iced",
  "once_cell",
@@ -499,13 +498,6 @@ name = "com-rs"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf43edc576402991846b093a7ca18a3477e0ef9c588cde84964b5d3e43016642"
-
-[[package]]
-name = "conpty"
-version = "0.5.1"
-dependencies = [
- "windows",
-]
 
 [[package]]
 name = "constant_time_eq"
