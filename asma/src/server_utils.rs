@@ -1,21 +1,27 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use regex::Regex;
+use sysinfo::{Pid, PidExt, ProcessExt, ProcessStatus, System, SystemExt};
 
 use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
     process::Stdio,
+    sync::Arc,
 };
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{ChildStdout, Command},
-    sync::mpsc::Sender,
+    sync::{mpsc::Sender, Mutex},
 };
+
+use std::time::Duration;
+use tokio::time::sleep;
+
 use tracing::{error, trace, warn};
 use uuid::Uuid;
 
-use crate::AsyncNotification;
+use crate::{models::RunState, AsyncNotification};
 
 #[derive(Debug, Clone)]
 pub enum UpdateMode {
@@ -30,13 +36,103 @@ pub enum UpdateServerProgress {
     Verifying(f32),
 }
 
+pub async fn stop_server(server_id: Uuid, pid: u32, system: Arc<Mutex<System>>) -> Result<()> {
+    trace!("Stopping {}", server_id);
+    let system_lock = system.lock().await;
+    if let Some(process) = system_lock.process(Pid::from_u32(pid)) {
+        trace!("Sending KILL to {}", pid);
+        process.kill_with(sysinfo::Signal::Kill);
+    }
+    Ok(())
+}
+
+/// Watches the process stack for changes to this server's process state
+pub async fn monitor_server(
+    server_id: Uuid,
+    installation_dir: impl AsRef<str>,
+    system: Arc<Mutex<System>>,
+    progress: Sender<AsyncNotification>,
+) -> Result<()> {
+    trace!("Monitoring {}", server_id);
+
+    let exe = Path::new(installation_dir.as_ref())
+        .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe")
+        .canonicalize()?;
+
+    let mut current_pid = None;
+    loop {
+        {
+            let mut system_lock = system.lock().await;
+            if let Some(pid) = current_pid {
+                let process_exists = system_lock.refresh_process(pid);
+                if !process_exists {
+                    break;
+                }
+            } else {
+                system_lock.refresh_processes();
+            }
+
+            // If we already have the PID, try to refresh that process.
+            let process = current_pid
+                .and_then(|pid| system_lock.process(pid))
+                .or_else(|| {
+                    system_lock.processes().values().find(|process| {
+                        process
+                            .exe()
+                            .canonicalize()
+                            .map(|process_exe| process_exe == exe)
+                            .unwrap_or(false)
+                    })
+                });
+
+            if let Some(process) = process {
+                let pid = process.pid();
+                match process.status() {
+                    ProcessStatus::Run => {
+                        current_pid = Some(pid);
+                        trace!(
+                            "{}: PID: {} CPU: {} MEM: {}",
+                            server_id,
+                            pid.as_u32(),
+                            process.cpu_usage(),
+                            process.memory()
+                        );
+                    }
+                    other => {
+                        trace!("{}: Other Status: {:?}.  Bailing...", server_id, other);
+                        break;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        if let Some(pid) = current_pid {
+            let _ = progress
+                .send(AsyncNotification::UpdateServerRunState(
+                    server_id,
+                    RunState::Available(pid.as_u32(), 0, 0),
+                ))
+                .await;
+        } else {
+            trace!("{}: Process exited or not found", server_id);
+            break;
+        }
+
+        sleep(Duration::from_secs(5)).await;
+    }
+    Ok(())
+}
+
+/// Starts the server, returns the PID of the running process
 pub async fn start_server(
     server_id: Uuid,
     server_name: impl AsRef<str>,
     installation_dir: impl AsRef<str>,
     map: impl AsRef<str>,
     port: u16,
-) -> Result<u32> {
+) -> Result<()> {
     let installation_dir = installation_dir.as_ref();
     let exe = Path::new(installation_dir)
         .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe")
@@ -64,7 +160,8 @@ pub async fn start_server(
         })
         .with_context(|| format!("Failed to spawn server: {}", command_string))?;
     let pid = child.id().expect("Failed to get child process id");
-    Ok(pid)
+    trace!("{}: PID: {}", server_id, pid);
+    Ok(())
 }
 
 pub async fn update_server(

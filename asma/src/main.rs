@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use components::{make_button, server_card};
 use dialogs::global_settings::{self, GlobalSettingsMessage};
 use dialogs::server_settings::{self, ServerSettingsMessage};
@@ -11,7 +13,9 @@ use iced::{
 };
 
 use server_utils::{UpdateServerProgress, ValidationResult};
+use sysinfo::{System, SystemExt};
 use tokio::sync::mpsc::{channel, Sender};
+use tokio::sync::Mutex;
 use tracing::{error, trace, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
@@ -31,7 +35,9 @@ use modal::Modal;
 use models::*;
 use uuid::Uuid;
 
-use crate::server_utils::{start_server, update_server, validate_server, UpdateMode};
+use crate::server_utils::{
+    monitor_server, start_server, stop_server, update_server, validate_server, UpdateMode,
+};
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -48,6 +54,7 @@ enum MainWindowMode {
 
 struct AppState {
     async_sender: Option<Sender<AsyncNotification>>,
+    system: Arc<Mutex<System>>,
     global_settings: GlobalSettings,
     global_state: GlobalState,
     servers: Vec<Server>,
@@ -55,6 +62,8 @@ struct AppState {
 }
 
 impl AppState {
+    // TODO: These should probably just be changed to `get_server*` since settings
+    // and state often go together and interior mutability is a PITA.
     pub fn get_server_settings(&self, id: Uuid) -> Option<&ServerSettings> {
         self.servers
             .iter()
@@ -79,10 +88,12 @@ impl AppState {
 pub enum AsyncNotification {
     AsyncStarted(Sender<AsyncNotification>),
     UpdateServerProgress(Uuid, UpdateServerProgress),
+    UpdateServerRunState(Uuid, RunState),
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    None,
     FontLoaded(Result<String, font::Error>),
     RefreshIp(LocalIp),
 
@@ -145,6 +156,9 @@ impl Application for AppState {
     type Flags = ();
 
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+        for signal in System::SUPPORTED_SIGNALS {
+            trace!("Supported : {:?}", signal);
+        }
         let arial_bytes = get_system_font_bytes("ARIAL.ttf").expect("Failed to find Arial");
         let global_settings = settings_utils::load_global_settings()
             .unwrap_or_else(|_| settings_utils::default_global_settings());
@@ -196,6 +210,7 @@ impl Application for AppState {
         (
             AppState {
                 async_sender: None,
+                system: Arc::new(Mutex::new(System::default())),
                 global_settings,
                 global_state: GlobalState {
                     app_version: env!("CARGO_PKG_VERSION").into(),
@@ -233,6 +248,7 @@ impl Application for AppState {
     fn update(&mut self, message: Message) -> iced::Command<Message> {
         //trace!("Message: {:?}", message);
         match message {
+            Message::None => Command::none(),
             Message::RefreshIp(ip_result) => {
                 trace!("Local IP resolved: {:?}", ip_result);
                 self.global_state.local_ip = ip_result;
@@ -250,7 +266,17 @@ impl Application for AppState {
             Message::ServerSettings(message) => server_settings::update(self, message),
             Message::StopServer(id) => {
                 trace!("Stop Server {} (Not Implemented)", id);
-                Command::none()
+                let server_state = self
+                    .get_server_state_mut(id)
+                    .expect("Failed to look up server state");
+                if let RunState::Available(pid, _, _) = server_state.run_state {
+                    server_state.run_state = RunState::Stopping;
+                    Command::perform(stop_server(id, pid, self.system.clone()), move |_| {
+                        Message::None
+                    })
+                } else {
+                    Command::none()
+                }
             }
             Message::StartServer(id) => {
                 trace!("Start Server {}", id);
@@ -266,9 +292,7 @@ impl Application for AppState {
                         server_settings.port,
                     ),
                     move |res| match res {
-                        Ok(pid) => {
-                            Message::ServerRunStateChanged(id, RunState::Available(pid, 0, 0))
-                        }
+                        Ok(_) => Message::ServerRunStateChanged(id, RunState::Starting),
                         Err(e) => {
                             error!("Failed to start server: {}", e.to_string());
                             Message::ServerRunStateChanged(id, RunState::Stopped)
@@ -278,11 +302,40 @@ impl Application for AppState {
             }
             Message::ServerRunStateChanged(id, run_state) => {
                 trace!("Server Run State Changed {}", id);
+                let installation_dir = self
+                    .get_server_settings(id)
+                    .expect("Failed to look up server settings")
+                    .get_full_installation_location();
+
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server settings");
-                server_state.run_state = run_state;
-                Command::none()
+
+                // TODO: If we hit the Starting state, we should start the process monitor for this server.
+                // Once we hit the Stopped state, we can stop the process monitor.
+                server_state.run_state = run_state.clone();
+                if let RunState::Starting = run_state {
+                    Command::perform(
+                        monitor_server(
+                            id,
+                            installation_dir,
+                            self.system.clone(),
+                            self.async_sender.as_ref().unwrap().clone(),
+                        ),
+                        move |res| match res {
+                            Ok(_) => Message::ServerRunStateChanged(id, RunState::Stopped),
+                            Err(e) => {
+                                error!(
+                                    "Failed to get server process information: {}",
+                                    e.to_string()
+                                );
+                                Message::ServerRunStateChanged(id, RunState::Stopped)
+                            }
+                        },
+                    )
+                } else {
+                    Command::none()
+                }
             }
 
             Message::NewServer => {
@@ -385,7 +438,31 @@ impl Application for AppState {
             Message::AsyncNotification(AsyncNotification::AsyncStarted(sender)) => {
                 trace!("Async notification pipe established");
                 self.async_sender = Some(sender);
-                Command::none()
+
+                // Run deferred startup operations
+                let run_state_commands = self.servers.iter().map(|s| {
+                    let id = s.id();
+                    let installation_dir = s.settings.get_full_installation_location();
+                    Command::perform(
+                        monitor_server(
+                            id,
+                            installation_dir,
+                            self.system.clone(),
+                            self.async_sender.as_ref().unwrap().clone(),
+                        ),
+                        move |res| match res {
+                            Ok(_) => Message::ServerRunStateChanged(id, RunState::Stopped),
+                            Err(e) => {
+                                error!(
+                                    "Failed to get server process information: {}",
+                                    e.to_string()
+                                );
+                                Message::ServerRunStateChanged(id, RunState::Stopped)
+                            }
+                        },
+                    )
+                });
+                Command::batch(run_state_commands)
             }
             Message::AsyncNotification(AsyncNotification::UpdateServerProgress(id, progress)) => {
                 let server_state = self
@@ -403,6 +480,14 @@ impl Application for AppState {
                     }
                 }
 
+                Command::none()
+            }
+            Message::AsyncNotification(AsyncNotification::UpdateServerRunState(id, run_state)) => {
+                trace!("UpdateServerRunState {}: {:?}", id, run_state);
+                let server_state = self
+                    .get_server_state_mut(id)
+                    .expect("Failed to look up server state");
+                server_state.run_state = run_state;
                 Command::none()
             }
         }
