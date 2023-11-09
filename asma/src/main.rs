@@ -13,6 +13,7 @@ use iced::{
 };
 
 use server_utils::{UpdateServerProgress, ValidationResult};
+use steamcmd_utils::validate_steamcmd;
 use sysinfo::{System, SystemExt};
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
@@ -207,6 +208,12 @@ impl Application for AppState {
 
         startup_commands.append(&mut validation_commands);
 
+        let steamcmd_state = if validate_steamcmd(&global_settings.steamcmd_directory) {
+            SteamCmdState::Installed
+        } else {
+            SteamCmdState::NotInstalled
+        };
+
         (
             AppState {
                 async_sender: None,
@@ -216,6 +223,7 @@ impl Application for AppState {
                     app_version: env!("CARGO_PKG_VERSION").into(),
                     local_ip: LocalIp::Unknown,
                     edit_server_id: Uuid::nil(),
+                    steamcmd_state,
                 },
                 servers,
                 mode: MainWindowMode::Servers,
@@ -496,38 +504,50 @@ impl Application for AppState {
     fn view(&self) -> Element<Message> {
         let main_header = components::main_header(&self.global_state);
 
-        let servers_list = column![
-            row![make_button(
-                "New Server",
-                Message::NewServer,
-                icons::ADD.clone()
-            )],
-            if self.servers.is_empty() {
-                container(
-                    text("NO SERVERS YET")
-                        .font(BOLD_FONT)
-                        .size(32)
-                        .style(Color::from([0.5, 0.5, 0.5]))
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .vertical_alignment(Vertical::Center)
-                        .horizontal_alignment(Horizontal::Center),
-                )
-            } else {
-                container(scrollable(
-                    column(self.servers.iter().map(server_card).collect()).spacing(5),
-                ))
-            } // if self.servers.is_empty() {
-              // } else {
-              //     scrollable(column![]).into()
-              // }
-        ]
-        .spacing(5)
-        .padding(5)
-        .width(Length::Fill)
-        .height(Length::Fill);
+        let bottom_pane = if let SteamCmdState::Installed = self.global_state.steamcmd_state {
+            container(
+                column![
+                    row![make_button(
+                        "New Server",
+                        Message::NewServer,
+                        icons::ADD.clone()
+                    )],
+                    if self.servers.is_empty() {
+                        container(
+                            text("NO SERVERS YET")
+                                .font(BOLD_FONT)
+                                .size(32)
+                                .style(Color::from([0.5, 0.5, 0.5]))
+                                .width(Length::Fill)
+                                .height(Length::Fill)
+                                .vertical_alignment(Vertical::Center)
+                                .horizontal_alignment(Horizontal::Center),
+                        )
+                    } else {
+                        container(scrollable(
+                            column(self.servers.iter().map(server_card).collect()).spacing(5),
+                        ))
+                    } // if self.servers.is_empty() {
+                      // } else {
+                      //     scrollable(column![]).into()
+                      // }
+                ]
+                .spacing(5)
+                .padding(5)
+                .width(Length::Fill)
+                .height(Length::Fill),
+            )
+        } else {
+            container(
+                column![
+                    text("SteamCMD not found"),
+                    text("Go to Global Settings and find or install it")
+                ]
+                .align_items(iced::Alignment::Center),
+            )
+        };
 
-        let main_content = container(column![main_header, horizontal_rule(3), servers_list])
+        let main_content = container(column![main_header, horizontal_rule(3), bottom_pane])
             .width(Length::Fill)
             .height(Length::Fill);
 
@@ -535,7 +555,7 @@ impl Application for AppState {
             MainWindowMode::Servers => main_content.into(),
             MainWindowMode::GlobalSettings => Modal::new(
                 main_content,
-                dialogs::global_settings::make_dialog(&self.global_settings),
+                dialogs::global_settings::make_dialog(&self),
             )
             .on_blur(GlobalSettingsMessage::CloseGlobalSettings.into())
             .into(),

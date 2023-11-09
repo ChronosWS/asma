@@ -1,11 +1,25 @@
 use anyhow::{bail, Context, Result};
 use futures_util::StreamExt;
-use std::{io::Write, path::PathBuf};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 use tracing::{error, trace};
 
+pub fn validate_steamcmd(installation_dir: impl AsRef<str>) -> bool {
+    let steamcmd_exe = Path::new(installation_dir.as_ref()).join("steamcmd.exe");
+
+    std::fs::File::open(steamcmd_exe.as_path())
+        .map(|_| true)
+        .unwrap_or_else(|_| {
+            trace!("Failed to find steamcmd at {:?}", steamcmd_exe);
+            false
+        })
+}
+
 // TODO: magic strings
-pub async fn get_steamcmd(destination_path: impl AsRef<str>) -> Result<()> {
-    let destination_path = destination_path.as_ref();
+pub async fn get_steamcmd(installation_dir: impl AsRef<str>) -> Result<bool> {
+    let destination_path = installation_dir.as_ref();
     trace!("Getting steamcmd to {}", destination_path);
     let mut zip_file_name = PathBuf::from(destination_path);
     zip_file_name.push("steamcmd.zip");
@@ -58,9 +72,6 @@ pub async fn get_steamcmd(destination_path: impl AsRef<str>) -> Result<()> {
         .with_context(|| format!("Failed to extract zip archive to {destination_path}"))?;
 
     trace!("steamcmd unzipped");
-    let mut steamcmd_exe = PathBuf::from(destination_path);
-    steamcmd_exe.push("steamcmd.exe");
 
-    std::fs::File::open(steamcmd_exe.as_path()).with_context(|| "Failed to verify steamcmd.exe")?;
-    Ok(())
+    Ok(validate_steamcmd(installation_dir))
 }

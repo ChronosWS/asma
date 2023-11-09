@@ -4,16 +4,16 @@ use iced::{
     widget::{
         self, column, container, horizontal_space, row, text, text_input, toggler, Container,
     },
-    Command, Length, Alignment,
+    Alignment, Command, Length,
 };
 use tracing::{error, info, trace};
 
 use crate::{
     components::make_button,
     icons,
-    models::{GlobalSettings, ThemeType},
+    models::{SteamCmdState, ThemeType},
     settings_utils,
-    steamcmd_utils::get_steamcmd,
+    steamcmd_utils::{get_steamcmd, validate_steamcmd},
     AppState, MainWindowMode, Message,
 };
 
@@ -50,10 +50,19 @@ pub(crate) fn update(app_state: &mut AppState, message: GlobalSettingsMessage) -
                 .map_err(|e| error!("Failed to save global settings: {}", e.to_string()));
             Command::none()
         }
-        GlobalSettingsMessage::UpdateSteamCmd => Command::perform(
-            get_steamcmd(app_state.global_settings.steamcmd_directory.to_owned()),
-            |_| GlobalSettingsMessage::SteamCmdUpdated.into(),
-        ),
+        GlobalSettingsMessage::UpdateSteamCmd => {
+            app_state.global_state.steamcmd_state = SteamCmdState::Installing;
+            Command::perform(
+                get_steamcmd(app_state.global_settings.steamcmd_directory.to_owned()),
+                |result| {
+                    if let Ok(true) = result {
+                        GlobalSettingsMessage::SteamCmdUpdated.into()
+                    } else {
+                        Message::None
+                    }
+                },
+            )
+        }
         GlobalSettingsMessage::OpenSteamCmdDirectory => {
             if let Err(e) = std::process::Command::new("explorer")
                 .args([app_state.global_settings.steamcmd_directory.as_str()])
@@ -87,10 +96,18 @@ pub(crate) fn update(app_state: &mut AppState, message: GlobalSettingsMessage) -
             } else {
                 error!("No folder selected");
             }
+
+            let steamcmd_state = if validate_steamcmd(&app_state.global_settings.steamcmd_directory) {
+                SteamCmdState::Installed
+            } else {
+                SteamCmdState::NotInstalled
+            };
+            app_state.global_state.steamcmd_state = steamcmd_state;
             Command::none()
         }
         GlobalSettingsMessage::SteamCmdUpdated => {
             trace!("SteamCmdUpdated");
+            app_state.global_state.steamcmd_state = SteamCmdState::Installed;
             Command::none()
         }
         GlobalSettingsMessage::OpenProfilesDirectory => {
@@ -139,7 +156,31 @@ pub(crate) fn update(app_state: &mut AppState, message: GlobalSettingsMessage) -
     }
 }
 
-pub fn make_dialog(global_settings: &GlobalSettings) -> Container<Message> {
+pub(crate) fn make_dialog<'a>(app_state: &AppState) -> Container<Message> {
+    let steamcmd_container = match &app_state.global_state.steamcmd_state {
+        SteamCmdState::Installed | SteamCmdState::NotInstalled => row![
+            make_button(
+                "Open...",
+                GlobalSettingsMessage::OpenSteamCmdDirectory.into(),
+                icons::FOLDER_OPEN.clone()
+            )
+            .width(100),
+            make_button(
+                "Update",
+                GlobalSettingsMessage::UpdateSteamCmd.into(),
+                icons::REFRESH.clone()
+            )
+            .width(100),
+            make_button(
+                "Set Location...",
+                GlobalSettingsMessage::SetSteamCmdDirectory.into(),
+                icons::FOLDER_OPEN.clone()
+            )
+            .width(150)
+        ],
+        SteamCmdState::Installing => row![text("Installing...")],
+    };
+
     container(
         column![
             row![
@@ -156,7 +197,7 @@ pub fn make_dialog(global_settings: &GlobalSettings) -> Container<Message> {
                 text("Light"),
                 toggler(
                     String::new(),
-                    match global_settings.theme {
+                    match app_state.global_settings.theme {
                         ThemeType::Light => false,
                         _ => true,
                     },
@@ -166,7 +207,7 @@ pub fn make_dialog(global_settings: &GlobalSettings) -> Container<Message> {
                 text("Dark"),
                 horizontal_space(20),
                 text("Debug UI"),
-                toggler(String::new(), global_settings.debug_ui, |v| {
+                toggler(String::new(), app_state.global_settings.debug_ui, |v| {
                     GlobalSettingsMessage::DebugUIToggled(v).into()
                 })
                 .width(Length::Shrink),
@@ -178,28 +219,11 @@ pub fn make_dialog(global_settings: &GlobalSettings) -> Container<Message> {
                 text("SteamCMD:")
                     .width(150)
                     .vertical_alignment(Vertical::Center),
-                text(global_settings.steamcmd_directory.to_owned())
+                text(app_state.global_settings.steamcmd_directory.to_owned())
                     .vertical_alignment(Vertical::Center)
                     .width(Length::Shrink),
                 horizontal_space(Length::Fill),
-                make_button(
-                    "Open...",
-                    GlobalSettingsMessage::OpenSteamCmdDirectory.into(),
-                    icons::FOLDER_OPEN.clone()
-                )
-                .width(100),
-                make_button(
-                    "Update",
-                    GlobalSettingsMessage::UpdateSteamCmd.into(),
-                    icons::REFRESH.clone()
-                )
-                .width(100),
-                make_button(
-                    "Set Location...",
-                    GlobalSettingsMessage::SetSteamCmdDirectory.into(),
-                    icons::FOLDER_OPEN.clone()
-                )
-                .width(150),
+                column![steamcmd_container]
             ]
             .align_items(Alignment::Center)
             .spacing(5),
@@ -207,9 +231,12 @@ pub fn make_dialog(global_settings: &GlobalSettings) -> Container<Message> {
                 text("Steam API Key:")
                     .width(150)
                     .vertical_alignment(Vertical::Center),
-                text_input("Enter Steam API Key", &global_settings.steam_api_key)
-                    .width(Length::Fill)
-                    .on_input(|v| GlobalSettingsMessage::SetSteamApiKey(v).into()),
+                text_input(
+                    "Enter Steam API Key",
+                    &app_state.global_settings.steam_api_key
+                )
+                .width(Length::Fill)
+                .on_input(|v| GlobalSettingsMessage::SetSteamApiKey(v).into()),
             ]
             .align_items(Alignment::Center)
             .spacing(5),
@@ -217,7 +244,7 @@ pub fn make_dialog(global_settings: &GlobalSettings) -> Container<Message> {
                 text("Profiles:")
                     .width(150)
                     .vertical_alignment(Vertical::Center),
-                text(global_settings.profiles_directory.to_owned())
+                text(app_state.global_settings.profiles_directory.to_owned())
                     .vertical_alignment(Vertical::Center),
                 horizontal_space(Length::Fill),
                 make_button(

@@ -3,9 +3,16 @@ use uuid::Uuid;
 
 use super::{ThemeType, LocalIp};
 
+
+#[derive(Debug, Clone)]
+pub enum SteamCmdState {
+    NotInstalled,
+    Installing,
+    Installed
+}
+
 // WARNING: If you add non-Optional values here, you must give them defaults or you
 //          will break manifest loading
-
 #[derive(Serialize, Deserialize)]
 pub struct GlobalSettings {
     pub theme: ThemeType,
@@ -25,7 +32,8 @@ pub struct GlobalSettings {
 pub struct GlobalState {
     pub app_version: String,
     pub local_ip: LocalIp,
-    pub edit_server_id: Uuid
+    pub edit_server_id: Uuid,
+    pub steamcmd_state: SteamCmdState,
 }
 
 fn get_default_app_id() -> String {
