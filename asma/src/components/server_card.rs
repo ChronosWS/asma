@@ -4,7 +4,8 @@ use iced::{
 };
 
 use crate::{
-    dialogs::server_settings::ServerSettingsMessage, file_utils, icons, models::*, Message,
+    dialogs::server_settings::ServerSettingsMessage, file_utils, icons, models::*,
+    server_utils::UpdateMode, Message,
 };
 
 use super::make_button;
@@ -19,6 +20,35 @@ fn server_card_style(_theme: &Theme) -> Appearance {
     }
 }
 pub fn server_card(server: &Server) -> Element<'_, Message> {
+    let run_state_content = match &server.state.run_state {
+        RunState::NotInstalled => container(horizontal_space(Length::Shrink)),
+        RunState::Stopped => container(make_button(
+            "Start",
+            Message::StartServer(server.id()),
+            icons::START.clone(),
+        )),
+        RunState::Starting => container(row![
+            text("Starting..."),
+            make_button(
+                "Stop",
+                Message::StopServer(server.id()),
+                icons::STOP.clone()
+            )
+        ]),
+        RunState::Stopping => container(row![text("Stopping..."),].align_items(Alignment::Center)),
+        RunState::Available(_pid, current_players, max_players) => container(
+            row![
+                text(format!("{}/{}", current_players, max_players)),
+                make_button(
+                    "Stop",
+                    Message::StopServer(server.id()),
+                    icons::STOP.clone()
+                )
+            ]
+            .align_items(Alignment::Center),
+        ),
+    };
+
     let install_state_content =
         if !file_utils::directory_exists(&server.settings.installation_location) {
             container(make_button(
@@ -34,7 +64,7 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                             "Install to: {}",
                             server.settings.get_full_installation_location()
                         ),
-                        Message::InstallServer(server.id()),
+                        Message::InstallServer(server.id(), UpdateMode::Update),
                         icons::DOWNLOAD.clone(),
                     )
                     .width(Length::Fill),
@@ -47,15 +77,32 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                     container(text(format!("Steam Verifying: {}%...", progress)))
                 }
                 InstallState::Validating => container(text("Validating install...")),
-                InstallState::Installed(version) => {
-                    container(text(format!("Last Updated: {}", version)))
-                }
+                InstallState::Installed(version) => container(
+                    if let RunState::Stopped = server.state.run_state {
+                        row![
+                            text(format!("Last Updated: {}", version)),
+                            make_button(
+                                "Update",
+                                Message::InstallServer(server.id(), UpdateMode::Update),
+                                icons::UP.clone(),
+                            ),
+                            make_button(
+                                "Validate",
+                                Message::InstallServer(server.id(), UpdateMode::Validate),
+                                icons::VALIDATE.clone(),
+                            )
+                        ]
+                    } else {
+                        row![text(format!("Last Updated: {}", version))]
+                    }
+                    .align_items(Alignment::Center),
+                ),
                 InstallState::FailedValidation(reason) => container(
                     row![
                         text(format!("Validation failed: {}", reason)).width(Length::Fill),
                         make_button(
                             "Re-install",
-                            Message::InstallServer(server.id()),
+                            Message::InstallServer(server.id(), UpdateMode::Update),
                             icons::DOWNLOAD.clone(),
                         )
                     ]
@@ -63,6 +110,11 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                 ),
             }
         };
+
+    let state_content = match (&server.state.install_state, &server.state.run_state) {
+        (InstallState::Installed(_), _) => row![install_state_content, run_state_content],
+        _ => row![install_state_content],
+    };
 
     container(
         column![
@@ -79,7 +131,7 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                 )
             ]
             .align_items(Alignment::Center),
-            row![install_state_content].align_items(Alignment::Center)
+            state_content.align_items(Alignment::Center)
         ]
         .spacing(5),
     )

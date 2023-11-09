@@ -1,9 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use regex::Regex;
-use serde::Deserialize;
+
 use std::{
-    fs::{FileType, Permissions},
     io::ErrorKind,
     path::{Path, PathBuf},
     process::Stdio,
@@ -18,6 +17,7 @@ use uuid::Uuid;
 
 use crate::AsyncNotification;
 
+#[derive(Debug, Clone)]
 pub enum UpdateMode {
     Update,
     Validate,
@@ -28,6 +28,43 @@ pub enum UpdateServerProgress {
     Initializing,
     Downloading(f32),
     Verifying(f32),
+}
+
+pub async fn start_server(
+    server_id: Uuid,
+    server_name: impl AsRef<str>,
+    installation_dir: impl AsRef<str>,
+    map: impl AsRef<str>,
+    port: u16,
+) -> Result<u32> {
+    let installation_dir = installation_dir.as_ref();
+    let exe = Path::new(installation_dir)
+        .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe")
+        .canonicalize()
+        .expect("Failed to canonicalize path");
+
+    let _profile_descriptor = format!("\"ASA.{}.{}\"", server_id.to_string(), server_name.as_ref());
+    let args = [
+        //&format!("\"ASA.{}.{}\"", server_id.to_string(), server_name.as_ref()),
+        //exe.to_str().expect("Failed to convert path to string"),
+        //"/NORMAL",
+        &format!("{}?Port={}", map.as_ref(), port),
+    ];
+
+    // If we want to tag the process with metadata, we either need to force set the title after launch,
+    // or run it via a batch file using `start "<profile_descriptor>"` ...
+    let mut command = Command::new(exe);
+    command.args(args);
+    let command_string = format!("{:?}", command);
+    let child = command
+        .spawn()
+        .map_err(|e| {
+            error!("Spawn failed: {}", e.to_string());
+            e
+        })
+        .with_context(|| format!("Failed to spawn server: {}", command_string))?;
+    let pid = child.id().expect("Failed to get child process id");
+    Ok(pid)
 }
 
 pub async fn update_server(
@@ -47,11 +84,16 @@ pub async fn update_server(
         installation_dir,
         "+login",
         "anonymous",
-        "+app_update",
-        app_id.as_ref(),
     ];
-    if let UpdateMode::Validate = mode {
-        args.push("validate");
+
+    match mode {
+        UpdateMode::Update => {
+            args.push("+app_update");
+            args.push(app_id.as_ref())
+        }
+        UpdateMode::Validate => {
+            args.push("validate");
+        }
     }
 
     args.push("+quit");
@@ -67,7 +109,6 @@ pub async fn update_server(
 
     command.args(args);
     command.stdout(Stdio::piped());
-    command.kill_on_drop(true);
 
     let mut child = command.spawn()?;
     let stdout: ChildStdout = child.stdout.take().expect("Failed to get piped stdout");
@@ -167,7 +208,6 @@ pub enum ValidationResult {
     Failed(String),
 }
 
-
 const STATE_INSTALL_SUCCESSFUL: u32 = 4;
 
 pub async fn validate_server(
@@ -185,7 +225,7 @@ pub async fn validate_server(
         Err(err) => match err.kind() {
             ErrorKind::NotFound => {
                 trace!("{}: No appmanifest found", id);
-                return Ok(ValidationResult::NotInstalled)
+                return Ok(ValidationResult::NotInstalled);
             }
             _ => return Err(err.into()),
         },

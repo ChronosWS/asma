@@ -31,7 +31,7 @@ use modal::Modal;
 use models::*;
 use uuid::Uuid;
 
-use crate::server_utils::{update_server, validate_server, UpdateMode};
+use crate::server_utils::{start_server, update_server, validate_server, UpdateMode};
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -93,9 +93,12 @@ pub enum Message {
     // Servers
     NewServer,
     EditServer(Uuid),
-    InstallServer(Uuid),
+    InstallServer(Uuid, UpdateMode),
     ServerUpdated(Uuid),
     ServerValidated(Uuid, ValidationResult),
+    StartServer(Uuid),
+    StopServer(Uuid),
+    ServerRunStateChanged(Uuid, RunState),
 
     // Keyboard and Mouse events
     Event(Event),
@@ -245,6 +248,43 @@ impl Application for AppState {
             }
             Message::GlobalSettings(message) => global_settings::update(self, message),
             Message::ServerSettings(message) => server_settings::update(self, message),
+            Message::StopServer(id) => {
+                trace!("Stop Server {} (Not Implemented)", id);
+                Command::none()
+            }
+            Message::StartServer(id) => {
+                trace!("Start Server {}", id);
+                let server_settings = self
+                    .get_server_settings(id)
+                    .expect("Failed to look up server settings");
+                Command::perform(
+                    start_server(
+                        id,
+                        server_settings.name.clone(),
+                        server_settings.get_full_installation_location(),
+                        server_settings.map.clone(),
+                        server_settings.port,
+                    ),
+                    move |res| match res {
+                        Ok(pid) => {
+                            Message::ServerRunStateChanged(id, RunState::Available(pid, 0, 0))
+                        }
+                        Err(e) => {
+                            error!("Failed to start server: {}", e.to_string());
+                            Message::ServerRunStateChanged(id, RunState::Stopped)
+                        }
+                    },
+                )
+            }
+            Message::ServerRunStateChanged(id, run_state) => {
+                trace!("Server Run State Changed {}", id);
+                let server_state = self
+                    .get_server_state_mut(id)
+                    .expect("Failed to look up server settings");
+                server_state.run_state = run_state;
+                Command::none()
+            }
+
             Message::NewServer => {
                 trace!("TODO: New Server");
                 self.mode = MainWindowMode::EditProfile;
@@ -253,6 +293,8 @@ impl Application for AppState {
                         id: Uuid::new_v4(),
                         name: String::new(),
                         installation_location: String::new(),
+                        map: "TheIsland_WP".into(),
+                        port: 7777,
                     },
                     state: ServerState::default(),
                 };
@@ -261,7 +303,7 @@ impl Application for AppState {
                 Command::none()
             }
             Message::EditServer(id) => {
-                trace!("Edit Server {}", id.to_string());
+                trace!("Edit Server {}", id);
                 self.mode = MainWindowMode::EditProfile;
                 let edit_server = self
                     .get_server_settings(id)
@@ -269,25 +311,26 @@ impl Application for AppState {
                 self.global_state.edit_server_id = edit_server.id;
                 Command::none()
             }
-            Message::InstallServer(id) => {
-                trace!("Install Server {}", id.to_string());
+            Message::InstallServer(id, mode) => {
+                trace!("Install Server {}", id);
                 let server_settings = self
                     .get_server_settings(id)
                     .expect("Failed to look up server settings");
+                let app_id = self.global_settings.app_id.clone();
                 Command::perform(
                     update_server(
                         id,
                         self.global_settings.steamcmd_directory.to_owned(),
                         server_settings.get_full_installation_location(),
-                        "2430930",
-                        UpdateMode::Update,
+                        app_id,
+                        mode,
                         self.async_sender.as_ref().unwrap().clone(),
                     ),
                     move |_| Message::ServerUpdated(id),
                 )
             }
             Message::ServerUpdated(id) => {
-                trace!("Server Updated {}", id.to_string());
+                trace!("Server Updated {}", id);
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
@@ -297,11 +340,7 @@ impl Application for AppState {
                     .expect("Failed to look up server settings");
                 let app_id = self.global_settings.app_id.to_owned();
                 Command::perform(
-                    validate_server(
-                        id,
-                        server_settings.get_full_installation_location(),
-                        app_id,
-                    ),
+                    validate_server(id, server_settings.get_full_installation_location(), app_id),
                     move |result| {
                         result
                             .map(|r| Message::ServerValidated(id, r))
@@ -315,15 +354,16 @@ impl Application for AppState {
                 )
             }
             Message::ServerValidated(id, ValidationResult::Success(version)) => {
-                trace!("Server Validated {}", id.to_string());
+                trace!("Server Validated {}", id);
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
                 server_state.install_state = InstallState::Installed(version);
+                server_state.run_state = RunState::Stopped;
                 Command::none()
             }
             Message::ServerValidated(id, ValidationResult::NotInstalled) => {
-                trace!("Server not installed {}", id.to_string());
+                trace!("Server not installed {}", id);
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
@@ -331,7 +371,7 @@ impl Application for AppState {
                 Command::none()
             }
             Message::ServerValidated(id, ValidationResult::Failed(reason)) => {
-                warn!("Server Validation Failed {}", id.to_string());
+                warn!("Server Validation Failed {}", id);
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
