@@ -35,11 +35,29 @@ impl ServerSettings {
 }
 
 #[derive(Debug, Clone)]
+pub struct RunData {
+    pub pid: u32,
+    pub cpu_usage: f32,
+    pub memory_usage: u64
+}
+
+impl RunData {
+    pub fn get_memory_display(&self) -> (u64, &'static str) {
+        match self.memory_usage {
+            x if x < 1024 => { (x, "b")}
+            x if x < 1024*1024 => { (x/1024, "Kb")}
+            x if x < 1024*1024*1024 => { (x/(1024*1024), "Mb")}
+            x => { (x/(1024*1024*1024), "Gb")}
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum RunState {
     NotInstalled,
     Stopped,
     Starting,
-    Available(u32, u8, u8),
+    Available(RunData),
     Stopping,
 }
 

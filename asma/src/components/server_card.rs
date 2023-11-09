@@ -36,17 +36,24 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
             )
         ]),
         RunState::Stopping => container(row![text("Stopping..."),].align_items(Alignment::Center)),
-        RunState::Available(_pid, current_players, max_players) => container(
-            row![
-                text(format!("{}/{}", current_players, max_players)),
-                make_button(
-                    "Stop",
-                    Message::StopServer(server.id()),
-                    icons::STOP.clone()
-                )
-            ]
-            .align_items(Alignment::Center),
-        ),
+        RunState::Available(run_data) => {
+            let (mem, unit) = run_data.get_memory_display();
+            container(
+                row![
+                    text(format!(
+                        "CPU: {:.2} MEM: {}{}",
+                        run_data.cpu_usage, mem, unit
+                    )),
+                    make_button(
+                        "Stop",
+                        Message::StopServer(server.id()),
+                        icons::STOP.clone()
+                    )
+                ]
+                .align_items(Alignment::Center)
+                .padding(5),
+            )
+        }
     };
 
     let install_state_content =

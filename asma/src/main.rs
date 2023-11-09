@@ -277,7 +277,7 @@ impl Application for AppState {
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
-                if let RunState::Available(pid, _, _) = server_state.run_state {
+                if let RunState::Available(RunData { pid, ..}) = server_state.run_state {
                     server_state.run_state = RunState::Stopping;
                     Command::perform(stop_server(id, pid, self.system.clone()), move |_| {
                         Message::None

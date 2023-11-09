@@ -21,7 +21,10 @@ use tokio::time::sleep;
 use tracing::{error, trace, warn};
 use uuid::Uuid;
 
-use crate::{models::RunState, AsyncNotification};
+use crate::{
+    models::{RunData, RunState},
+    AsyncNotification,
+};
 
 #[derive(Debug, Clone)]
 pub enum UpdateMode {
@@ -90,6 +93,17 @@ pub async fn monitor_server(
                 match process.status() {
                     ProcessStatus::Run => {
                         current_pid = Some(pid);
+                        let run_data = RunData {
+                            pid: pid.as_u32(),
+                            cpu_usage: process.cpu_usage(),
+                            memory_usage: process.memory(),
+                        };
+                        let _ = progress
+                            .send(AsyncNotification::UpdateServerRunState(
+                                server_id,
+                                RunState::Available(run_data),
+                            ))
+                            .await;
                         trace!(
                             "{}: PID: {} CPU: {} MEM: {}",
                             server_id,
@@ -108,14 +122,7 @@ pub async fn monitor_server(
             }
         }
 
-        if let Some(pid) = current_pid {
-            let _ = progress
-                .send(AsyncNotification::UpdateServerRunState(
-                    server_id,
-                    RunState::Available(pid.as_u32(), 0, 0),
-                ))
-                .await;
-        } else {
+        if let None = current_pid {
             trace!("{}: Process exited or not found", server_id);
             break;
         }
