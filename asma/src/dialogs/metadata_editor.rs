@@ -2,7 +2,7 @@ use iced::{
     theme,
     widget::{
         self, checkbox, column, container, horizontal_rule, horizontal_space, pick_list, row, text,
-        text_input, Column, Container,
+        text_editor, text_input, Column, Container, scrollable,
     },
     Alignment, Command, Length,
 };
@@ -18,6 +18,14 @@ use crate::{
     AppState, MainWindowMode, Message,
 };
 
+pub enum MetadataEditContext {
+    NotEditing,
+    Editing {
+        metadata_id: usize,
+        description_content: text_editor::Content,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub enum MetadataEditorMessage {
     OpenMetadataEditor,
@@ -32,11 +40,15 @@ pub enum MetadataEditorMessage {
 pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -> Command<Message> {
     match message {
         MetadataEditorMessage::OpenMetadataEditor => {
-            app_state.mode = MainWindowMode::MetadataEditor(None);
+            app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing);
             widget::focus_next()
         }
         MetadataEditorMessage::CloseMetadataEditor => {
-            if let MainWindowMode::MetadataEditor(Some(metadata_id)) = app_state.mode {
+            if let MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                metadata_id,
+                ..
+            }) = app_state.mode
+            {
                 if app_state.config_metadata.entries[metadata_id]
                     .name
                     .is_empty()
@@ -52,15 +64,23 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
         }
         MetadataEditorMessage::AddMetadataEntry => {
             let new_metadata = MetadataEntry::default();
+            let description_content = text_editor::Content::with_text(&new_metadata.description);
             app_state.config_metadata.entries.push(new_metadata);
-            let index = app_state.config_metadata.entries.len() - 1;
-            app_state.mode = MainWindowMode::MetadataEditor(Some(index));
+            let metadata_id = app_state.config_metadata.entries.len() - 1;
+            app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                metadata_id,
+                description_content,
+            });
             Command::none()
         }
 
         MetadataEditorMessage::LocationChanged(location) => {
             trace!("Selected location {}", location);
-            if let MainWindowMode::MetadataEditor(Some(metadata_id)) = app_state.mode {
+            if let MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                metadata_id,
+                ..
+            }) = app_state.mode
+            {
                 app_state.config_metadata.entries[metadata_id].location = location;
             }
             Command::none()
@@ -70,7 +90,11 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
                 "Variant Type {}",
                 if is_vector { "Vector" } else { "Scalar" }
             );
-            if let MainWindowMode::MetadataEditor(Some(metadata_id)) = app_state.mode {
+            if let MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                metadata_id,
+                ..
+            }) = app_state.mode
+            {
                 let existing_type = &app_state.config_metadata.entries[metadata_id].value_type;
 
                 app_state.config_metadata.entries[metadata_id].value_type = ConfigValueType {
@@ -83,7 +107,11 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
         }
         MetadataEditorMessage::ValueTypeChanged(value_type) => {
             trace!("Value Type {}", value_type);
-            if let MainWindowMode::MetadataEditor(Some(metadata_id)) = app_state.mode {
+            if let MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                metadata_id,
+                ..
+            }) = app_state.mode
+            {
                 let existing_type = &app_state.config_metadata.entries[metadata_id].value_type;
                 app_state.config_metadata.entries[metadata_id].value_type = ConfigValueType {
                     is_vector: existing_type.is_vector,
@@ -96,21 +124,24 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
 }
 
 pub(crate) fn make_dialog<'a>(
-    app_state: &AppState,
-    metadata_id: Option<usize>,
-) -> Container<Message> {
-    let is_editing_entry = if let MainWindowMode::MetadataEditor(None) = app_state.mode {
+    app_state: &'a AppState,
+    edit_context: &'a MetadataEditContext,
+) -> Container<'a, Message> {
+    let is_editing_entry = if let MetadataEditContext::NotEditing = edit_context {
         false
     } else {
         true
     };
 
-
-    let editor_content: Column<'_, Message> = if let Some(metadata_id) = metadata_id {
+    let editor_content: Column<'_, Message> = if let MetadataEditContext::Editing {
+        metadata_id,
+        description_content,
+    } = &edit_context
+    {
         let metadata = app_state
             .config_metadata
             .entries
-            .get(metadata_id)
+            .get(*metadata_id)
             .expect("Editing non-existant metadata entry");
 
         column![
@@ -123,10 +154,7 @@ pub(crate) fn make_dialog<'a>(
             ]
             .padding(5)
             .align_items(Alignment::Center),
-            row![
-                text("Description:"),
-                text_input("Enter a description:", &metadata.description)
-            ],
+            row![text("Description:"), text_editor(description_content)].height(200),
             row![
                 text("Value Type:"),
                 checkbox("Array", metadata.value_type.is_vector, |v| {
@@ -164,7 +192,7 @@ pub(crate) fn make_dialog<'a>(
             },
         ],
         horizontal_rule(3),
-        editor_content
+        scrollable(editor_content)
     ])
     .padding(10)
     .style(theme::Container::Box)

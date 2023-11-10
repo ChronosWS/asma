@@ -25,7 +25,8 @@ tokio = { version = "1.33.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.17", features = [ "env-filter"] }
 zip = "0.6.6"
-iced= { version = "0.10.0", features = [ "advanced", "image", "debug", "tokio" ] }
+# iced= { version = "0.10.0", features = [ "advanced", "image", "debug", "tokio" ] }
+iced = { git = "https://github.com/iced-rs/iced.git", features = [ "advanced", "image", "debug", "tokio" ]}
 
 [build-dependencies]
 anyhow = "1.0.75"

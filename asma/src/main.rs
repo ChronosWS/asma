@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use components::{make_button, server_card};
 use dialogs::global_settings::{self, GlobalSettingsMessage};
-use dialogs::metadata_editor::{self, MetadataEditorMessage};
+use dialogs::metadata_editor::{self, MetadataEditorMessage, MetadataEditContext};
 use dialogs::server_settings::{self, ServerSettingsMessage};
 use fonts::{get_system_font_bytes, BOLD_FONT};
 use futures_util::SinkExt;
@@ -54,7 +54,7 @@ enum MainWindowMode {
     Servers,
     GlobalSettings,
     EditProfile(Uuid),
-    MetadataEditor(Option<usize>),
+    MetadataEditor(MetadataEditContext),
 }
 
 struct AppState {
@@ -263,7 +263,7 @@ impl Application for AppState {
 
     fn subscription(&self) -> Subscription<Self::Message> {
         Subscription::batch([
-            subscription::events().map(Message::Event),
+        //subscription::events().map(Message::Event),
             async_pump().map(Message::AsyncNotification),
         ])
     }
@@ -569,24 +569,24 @@ impl Application for AppState {
             .width(Length::Fill)
             .height(Length::Fill);
 
-        let result: Element<Message> = match self.mode {
+        let result: Element<Message> = match &self.mode {
             MainWindowMode::Servers => main_content.into(),
             MainWindowMode::GlobalSettings => {
                 Modal::new(main_content, dialogs::global_settings::make_dialog(&self))
                     .on_blur(GlobalSettingsMessage::CloseGlobalSettings.into())
                     .into()
             }
-            MainWindowMode::MetadataEditor(metadata_id) => {
-                Modal::new(main_content, dialogs::metadata_editor::make_dialog(&self, metadata_id))
+            MainWindowMode::MetadataEditor(edit_context) => {
+                Modal::new(main_content, dialogs::metadata_editor::make_dialog(&self, edit_context))
                     .on_blur(MetadataEditorMessage::CloseMetadataEditor.into())
                     .into()
             }
             MainWindowMode::EditProfile(server_id) => {
                 Modal::new(
                     main_content,
-                    dialogs::server_settings::make_dialog(&self, server_id),
+                    dialogs::server_settings::make_dialog(&self, *server_id),
                 )
-                .on_blur(ServerSettingsMessage::CloseServerSettings(server_id).into())
+                .on_blur(ServerSettingsMessage::CloseServerSettings(*server_id).into())
                 .into()
             }
         };

@@ -8,7 +8,7 @@ pub const BOLD_FONT: Font = Font {
     family: Family::Name("Arial"),
     weight: Weight::Bold,
     stretch: Stretch::Normal,
-    monospaced: false
+    style: iced::font::Style::Normal
 };
 
 pub fn get_system_font_bytes(font_file: &str) -> Result<Vec<u8>> {
