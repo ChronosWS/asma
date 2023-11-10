@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use components::{make_button, server_card};
 use dialogs::global_settings::{self, GlobalSettingsMessage};
+use dialogs::metadata_editor::{self, MetadataEditorMessage};
 use dialogs::server_settings::{self, ServerSettingsMessage};
 use fonts::{get_system_font_bytes, BOLD_FONT};
 use futures_util::SinkExt;
@@ -12,6 +13,7 @@ use iced::{
     Subscription, Theme,
 };
 
+use models::config::{ConfigEntries, ConfigMetadata};
 use server_utils::{UpdateServerProgress, ValidationResult};
 use steamcmd_utils::validate_steamcmd;
 use sysinfo::{System, SystemExt};
@@ -21,6 +23,7 @@ use tracing::{error, trace, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod components;
+mod config_utils;
 mod dialogs;
 mod file_utils;
 mod fonts;
@@ -50,7 +53,8 @@ use crate::server_utils::{
 enum MainWindowMode {
     Servers,
     GlobalSettings,
-    EditProfile,
+    EditProfile(Uuid),
+    MetadataEditor(Option<usize>),
 }
 
 struct AppState {
@@ -58,6 +62,7 @@ struct AppState {
     system: Arc<Mutex<System>>,
     global_settings: GlobalSettings,
     global_state: GlobalState,
+    config_metadata: ConfigMetadata,
     servers: Vec<Server>,
     mode: MainWindowMode,
 }
@@ -101,6 +106,7 @@ pub enum Message {
     // Dialogs
     GlobalSettings(GlobalSettingsMessage),
     ServerSettings(ServerSettingsMessage),
+    MetadataEditor(MetadataEditorMessage),
 
     // Servers
     NewServer,
@@ -128,6 +134,12 @@ impl From<GlobalSettingsMessage> for Message {
 impl From<ServerSettingsMessage> for Message {
     fn from(value: ServerSettingsMessage) -> Self {
         Message::ServerSettings(value)
+    }
+}
+
+impl From<MetadataEditorMessage> for Message {
+    fn from(value: MetadataEditorMessage) -> Self {
+        Message::MetadataEditor(value)
     }
 }
 
@@ -163,6 +175,7 @@ impl Application for AppState {
         let arial_bytes = get_system_font_bytes("ARIAL.ttf").expect("Failed to find Arial");
         let global_settings = settings_utils::load_global_settings()
             .unwrap_or_else(|_| settings_utils::default_global_settings());
+        let config_metadata = config_utils::load_config_metadata().unwrap_or_default();
         let servers = settings_utils::load_server_settings(&global_settings)
             .expect("Failed to load server settings")
             .drain(..)
@@ -222,9 +235,11 @@ impl Application for AppState {
                 global_state: GlobalState {
                     app_version: env!("CARGO_PKG_VERSION").into(),
                     local_ip: LocalIp::Unknown,
-                    edit_server_id: Uuid::nil(),
+                    edit_server_id: None,
+                    edit_metadata_id: None,
                     steamcmd_state,
                 },
+                config_metadata,
                 servers,
                 mode: MainWindowMode::Servers,
             },
@@ -272,12 +287,13 @@ impl Application for AppState {
             }
             Message::GlobalSettings(message) => global_settings::update(self, message),
             Message::ServerSettings(message) => server_settings::update(self, message),
+            Message::MetadataEditor(message) => metadata_editor::update(self, message),
             Message::StopServer(id) => {
                 trace!("Stop Server {} (Not Implemented)", id);
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
-                if let RunState::Available(RunData { pid, ..}) = server_state.run_state {
+                if let RunState::Available(RunData { pid, .. }) = server_state.run_state {
                     server_state.run_state = RunState::Stopping;
                     Command::perform(stop_server(id, pid, self.system.clone()), move |_| {
                         Message::None
@@ -348,7 +364,6 @@ impl Application for AppState {
 
             Message::NewServer => {
                 trace!("TODO: New Server");
-                self.mode = MainWindowMode::EditProfile;
                 let server = Server {
                     settings: ServerSettings {
                         id: Uuid::new_v4(),
@@ -356,20 +371,23 @@ impl Application for AppState {
                         installation_location: String::new(),
                         map: "TheIsland_WP".into(),
                         port: 7777,
+                        config_entries: ConfigEntries::default()
                     },
                     state: ServerState::default(),
                 };
-                self.global_state.edit_server_id = server.settings.id;
+                self.mode = MainWindowMode::EditProfile(server.settings.id);
+
+                //self.global_state.edit_server_id = Some(server.settings.id);
                 self.servers.push(server);
                 Command::none()
             }
             Message::EditServer(id) => {
                 trace!("Edit Server {}", id);
-                self.mode = MainWindowMode::EditProfile;
                 let edit_server = self
                     .get_server_settings(id)
                     .expect("Failed to look up server settings");
-                self.global_state.edit_server_id = edit_server.id;
+                self.global_state.edit_server_id = Some(edit_server.id);
+                self.mode = MainWindowMode::EditProfile(id);
                 Command::none()
             }
             Message::InstallServer(id, mode) => {
@@ -553,21 +571,22 @@ impl Application for AppState {
 
         let result: Element<Message> = match self.mode {
             MainWindowMode::Servers => main_content.into(),
-            MainWindowMode::GlobalSettings => Modal::new(
-                main_content,
-                dialogs::global_settings::make_dialog(&self),
-            )
-            .on_blur(GlobalSettingsMessage::CloseGlobalSettings.into())
-            .into(),
-            MainWindowMode::EditProfile => {
-                let server_settings = self
-                    .get_server_settings(self.global_state.edit_server_id)
-                    .expect("Non-existant server requested for edit");
+            MainWindowMode::GlobalSettings => {
+                Modal::new(main_content, dialogs::global_settings::make_dialog(&self))
+                    .on_blur(GlobalSettingsMessage::CloseGlobalSettings.into())
+                    .into()
+            }
+            MainWindowMode::MetadataEditor(metadata_id) => {
+                Modal::new(main_content, dialogs::metadata_editor::make_dialog(&self, metadata_id))
+                    .on_blur(MetadataEditorMessage::CloseMetadataEditor.into())
+                    .into()
+            }
+            MainWindowMode::EditProfile(server_id) => {
                 Modal::new(
                     main_content,
-                    dialogs::server_settings::make_dialog(server_settings),
+                    dialogs::server_settings::make_dialog(&self, server_id),
                 )
-                .on_blur(ServerSettingsMessage::CloseServerSettings(server_settings.id).into())
+                .on_blur(ServerSettingsMessage::CloseServerSettings(server_id).into())
                 .into()
             }
         };

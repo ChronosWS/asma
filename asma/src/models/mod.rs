@@ -4,6 +4,7 @@ use serde::{Serialize, Deserialize};
 
 mod global;
 mod server;
+pub mod config;
 
 pub use global::*;
 pub use server::*;

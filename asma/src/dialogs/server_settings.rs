@@ -2,12 +2,15 @@ use iced::{
     alignment::Vertical,
     theme,
     widget::{column, container, horizontal_space, row, text, text_input, Container},
-    Length, Command,
+    Command, Length,
 };
-use tracing::{info, error};
+use tracing::{error, info};
 use uuid::Uuid;
 
-use crate::{components::make_button, icons, models::ServerSettings, Message, AppState, MainWindowMode, settings_utils::save_server_settings_with_error};
+use crate::{
+    components::make_button, icons, settings_utils::save_server_settings_with_error, AppState,
+    MainWindowMode, Message,
+};
 
 #[derive(Debug, Clone)]
 pub enum ServerSettingsMessage {
@@ -27,6 +30,7 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
         }
         ServerSettingsMessage::CloseServerSettings(id) => {
             app_state.mode = MainWindowMode::Servers;
+            app_state.global_state.edit_server_id = None;
             if let Some(server_settings) = app_state.get_server_settings(id) {
                 save_server_settings_with_error(&app_state.global_settings, server_settings)
             }
@@ -60,7 +64,8 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
             if let Some(folder) = folder {
                 info!("Setting path: {:?}", folder);
                 // TODO: This is really clunky, too much interior mutability.
-                app_state.get_server_settings_mut(id)
+                app_state
+                    .get_server_settings_mut(id)
                     .unwrap()
                     .installation_location = folder.to_str().unwrap().into();
                 save_server_settings_with_error(
@@ -74,7 +79,11 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
         }
     }
 }
-pub fn make_dialog(server_settings: &ServerSettings) -> Container<Message> {
+
+pub(crate) fn make_dialog(app_state: &AppState, server_id: Uuid) -> Container<Message> {
+    let server_settings = app_state
+        .get_server_settings(server_id)
+        .expect("Failed to find server id");
     container(
         column![
             row![
@@ -93,8 +102,9 @@ pub fn make_dialog(server_settings: &ServerSettings) -> Container<Message> {
                 text("Name:")
                     .width(100)
                     .vertical_alignment(Vertical::Center),
-                text_input("Server Name", &server_settings.name)
-                    .on_input(|v| ServerSettingsMessage::ServerSetName(server_settings.id, v).into()),
+                text_input("Server Name", &server_settings.name).on_input(|v| {
+                    ServerSettingsMessage::ServerSetName(server_settings.id, v).into()
+                }),
                 horizontal_space(Length::Fill),
             ]
             .spacing(5),
@@ -107,13 +117,15 @@ pub fn make_dialog(server_settings: &ServerSettings) -> Container<Message> {
                 horizontal_space(Length::Fill),
                 make_button(
                     "Open...",
-                    ServerSettingsMessage::OpenServerInstallationDirectory(server_settings.id).into(),
+                    ServerSettingsMessage::OpenServerInstallationDirectory(server_settings.id)
+                        .into(),
                     icons::FOLDER_OPEN.clone()
                 )
                 .width(100),
                 make_button(
                     "Set Location...",
-                    ServerSettingsMessage::SetServerInstallationDirectory(server_settings.id).into(),
+                    ServerSettingsMessage::SetServerInstallationDirectory(server_settings.id)
+                        .into(),
                     icons::FOLDER_OPEN.clone()
                 )
                 .width(150),

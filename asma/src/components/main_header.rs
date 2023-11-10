@@ -3,7 +3,12 @@ use iced::{
     Alignment, Length,
 };
 
-use crate::{dialogs::global_settings::GlobalSettingsMessage, icons, models::GlobalState, Message};
+use crate::{
+    dialogs::{global_settings::GlobalSettingsMessage, metadata_editor::MetadataEditorMessage},
+    icons,
+    models::GlobalState,
+    Message,
+};
 
 use super::make_button;
 
@@ -13,11 +18,19 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
             text("ASM: Ascended")
                 .size(40)
                 .vertical_alignment(iced::alignment::Vertical::Top),
-            make_button(
-                "Global Settings...",
-                Message::GlobalSettings(GlobalSettingsMessage::OpenGlobalSettings),
-                icons::SETTINGS.clone()
-            )
+            row![
+                make_button(
+                    "Global Settings...",
+                    Message::GlobalSettings(GlobalSettingsMessage::OpenGlobalSettings),
+                    icons::SETTINGS.clone()
+                ),
+                make_button(
+                    "Config Metadata...",
+                    Message::MetadataEditor(MetadataEditorMessage::OpenMetadataEditor),
+                    icons::SETTINGS.clone()
+                )
+            ]
+            .padding(5)
         ],
         horizontal_space(Length::Fill),
         column![

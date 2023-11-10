@@ -3,6 +3,8 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::config::ConfigEntries;
+
 // WARNING: If you add non-Optional values here, you must give them defaults or you
 //          will break manifest loading
 #[derive(Serialize, Deserialize)]
@@ -14,6 +16,8 @@ pub struct ServerSettings {
     pub map: String,
     #[serde(default = "get_default_port")]
     pub port: u16,
+    #[serde(default)]
+    pub config_entries: ConfigEntries
 }
 
 fn get_default_map() -> String {

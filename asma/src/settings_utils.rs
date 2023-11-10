@@ -44,7 +44,7 @@ pub fn default_global_settings() -> GlobalSettings {
     }
 }
 
-fn get_default_global_settings_path() -> PathBuf {
+pub(crate) fn get_default_global_settings_path() -> PathBuf {
     // If the current process directory is writeable, then we expect it to be there
     // Otherwise we will try for LOCAL_APP_DATA
     let global_settings_path = process_path::get_executable_path()
