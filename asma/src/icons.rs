@@ -8,6 +8,9 @@ pub static ADD: image::Handle =
 pub static CANCEL: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/Cancel.ico")).into();
 #[dynamic]
+pub static DELETE: image::Handle =
+    image::Handle::from_memory(std::include_bytes!("../res/icons/Delete.ico")).into();
+#[dynamic]
 pub static DOWNLOAD: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/Download.ico")).into();
 #[dynamic]

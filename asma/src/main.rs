@@ -521,7 +521,6 @@ impl Application for AppState {
 
     fn view(&self) -> Element<Message> {
         let main_header = components::main_header(&self.global_state);
-
         let bottom_pane = if let SteamCmdState::Installed = self.global_state.steamcmd_state {
             container(
                 column![
@@ -545,10 +544,7 @@ impl Application for AppState {
                         container(scrollable(
                             column(self.servers.iter().map(server_card).collect()).spacing(5),
                         ))
-                    } // if self.servers.is_empty() {
-                      // } else {
-                      //     scrollable(column![]).into()
-                      // }
+                    }
                 ]
                 .spacing(5)
                 .padding(5)
@@ -601,9 +597,7 @@ impl Application for AppState {
 fn main() -> iced::Result {
     init_tracing();
 
-    AppState::run(Settings {
-        ..Default::default()
-    })
+    AppState::run(Settings::default())
 }
 
 fn init_tracing() {
