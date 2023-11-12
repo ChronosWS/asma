@@ -1455,7 +1455,7 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1469,7 +1469,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "bitflags 1.3.2",
  "instant",
@@ -1483,7 +1483,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "futures",
  "iced_core",
@@ -1496,7 +1496,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "bitflags 1.3.2",
  "bytemuck",
@@ -1518,7 +1518,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -1531,7 +1531,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1541,7 +1541,7 @@ dependencies = [
 [[package]]
 name = "iced_style"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "iced_core",
  "once_cell",
@@ -1551,7 +1551,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1568,7 +1568,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "bitflags 1.3.2",
  "bytemuck",
@@ -1586,7 +1586,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "iced_renderer",
  "iced_runtime",
@@ -1599,7 +1599,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced.git#751ea77c29f6eb3d00f45f0a04c833a1d03a425c"
+source = "git+https://github.com/ChronosWS/iced.git?branch=chronosws-winit#3ac21a786573de73d89f6d4b714ccc8fc35f3c50"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -4437,7 +4437,7 @@ checksum = "ed94fce61571a4006852b7389a063ab983c02eb1bb37b47f8272ce92d06d9538"
 [[package]]
 name = "winit"
 version = "0.28.6"
-source = "git+https://github.com/iced-rs/winit.git?rev=c52db2045d0a2f1b8d9923870de1d4ab1994146e#c52db2045d0a2f1b8d9923870de1d4ab1994146e"
+source = "git+https://github.com/ChronosWS/winit.git#d43a2f3ca63756eb4cc8aca9110af7a3e1b4519d"
 dependencies = [
  "android-activity",
  "bitflags 1.3.2",

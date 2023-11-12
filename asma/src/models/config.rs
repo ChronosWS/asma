@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::ParseBoolError};
 
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -79,7 +79,7 @@ impl<T: AsRef<str>> From<T> for IniSection {
             "messageoftheday" => Self::MessageOfTheDay,
             "/script/shootergame.shootergamemode" => Self::ScriptShooterGameShooterGameMode,
             "modinstaller" => Self::ModInstaller,
-            v => Self::Custom(value.as_ref().to_owned()),
+            v => Self::Custom(v.to_owned()),
         }
     }
 }
@@ -107,48 +107,30 @@ impl Display for ConfigLocation {
 pub enum ConfigValue {
     Bool(bool),
     Float(f32),
-    Integer(u64),
+    Integer(i64),
     String(String),
     Enum { name: String, value: String },
 }
 
 impl Display for ConfigValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Bool(_) => "Bool",
-                Self::Float(_) => "Float",
-                Self::Integer(_) => "Integer",
-                Self::String(_) => "String",
-                Self::Enum { name, value: _ } => name,
-            }
-        )
-    }
-}
-
-impl<T: AsRef<str>> From<T> for ConfigValue {
-    fn from(value: T) -> Self {
-        let value = value.as_ref();
-
-        if let Ok(value) = value.parse::<f32>() {
-            ConfigValue::Float(value)
-        } else if let Ok(value) = value.parse::<u64>() {
-            ConfigValue::Integer(value)
-        } else if let Ok(value) = value.parse::<bool>() {
-            ConfigValue::Bool(value)
-        } else {
-            ConfigValue::String(value.to_owned())
+        match self {
+            Self::Bool(v) => write!(f, "{}", v),
+            Self::Float(v) => write!(f, "{}", v),
+            Self::Integer(v) => write!(f, "{}", v),
+            Self::String(v) => write!(f, "{}", v),
+            Self::Enum { name, value } => write!(f, "{}::{}", name, value),
         }
     }
 }
 
 impl ConfigValue {
-    pub fn from_type_and_value(value_type: ConfigValueType, value: &str) -> Result<ConfigValue> {
-        Ok(match value_type.base_type {
-            ConfigValueBaseType::Bool => ConfigValue::Bool(value.parse::<bool>()?),
-            ConfigValueBaseType::Integer => ConfigValue::Integer(value.parse::<u64>()?),
+    pub fn from_type_and_value(value_type: &ConfigValueType, value: &str) -> Result<ConfigValue> {
+        Ok(match &value_type.base_type {
+            ConfigValueBaseType::Bool => {
+                ConfigValue::Bool(ConfigValueBaseType::try_parse_bool(value)?)
+            }
+            ConfigValueBaseType::Integer => ConfigValue::Integer(value.parse::<i64>()?),
             ConfigValueBaseType::Float => ConfigValue::Float(value.parse::<f32>()?),
             ConfigValueBaseType::String => ConfigValue::String(value.to_owned()),
             ConfigValueBaseType::Enum(_enum) => bail!("Enum parsing not supported yet"),
@@ -162,24 +144,32 @@ pub enum ConfigVariant {
     Vector(Vec<ConfigValue>),
 }
 
-impl<T: AsRef<str>> From<T> for ConfigVariant {
-    fn from(value: T) -> Self {
-        let value = value.as_ref();
-
-        // Infer the quantity
-        if value.starts_with('[') && value.ends_with(']') {
-            // TODO: This could get tricky if nesting is allowed.
-            let splits = value.split(',').map(ConfigValue::from).collect();
-            ConfigVariant::Vector(splits)
-        } else {
-            ConfigVariant::Scalar(value.into())
+impl Display for ConfigVariant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Scalar(value) => write!(f, "{}", value),
+            Self::Vector(values) => {
+                let values: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+                write!(f, "{}", values.join(","))
+            }
         }
     }
 }
 
 impl ConfigVariant {
-    pub fn from_type_and_value(value_type: &ConfigValueType, value: &str) -> Self {
-        Self::Scalar(ConfigValue::Bool(true))
+    pub fn from_type_and_value(value_type: &ConfigValueType, value: &str) -> Result<Self> {
+        Ok(match value_type.quantity {
+            ConfigQuantity::Scalar => {
+                Self::Scalar(ConfigValue::from_type_and_value(value_type, value)?)
+            }
+            ConfigQuantity::Vector => {
+                let values = value
+                    .split(',')
+                    .map(|v| ConfigValue::from_type_and_value(value_type, v))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Self::Vector(values)
+            }
+        })
     }
 }
 
@@ -212,15 +202,19 @@ impl ConfigValueBaseType {
     pub fn infer_from(value: impl AsRef<str>) -> Self {
         let value = value.as_ref();
 
-        if value.parse::<f32>().is_ok() {
-            ConfigValueBaseType::Float
-        } else if value.parse::<u64>().is_ok() {
+        if value.parse::<i64>().is_ok() {
             ConfigValueBaseType::Integer
-        } else if value.parse::<bool>().is_ok() {
+        } else if value.parse::<f32>().is_ok() {
+            ConfigValueBaseType::Float
+        } else if ConfigValueBaseType::try_parse_bool(value).is_ok() {
             ConfigValueBaseType::Bool
         } else {
             ConfigValueBaseType::String
         }
+    }
+
+    fn try_parse_bool(value: &str) -> Result<bool, ParseBoolError> {
+        value.to_ascii_lowercase().parse()
     }
 }
 
@@ -274,6 +268,12 @@ pub struct ConfigValueType {
     pub base_type: ConfigValueBaseType,
 }
 
+impl Display for ConfigValueType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}<{}>", self.quantity, self.base_type)
+    }
+}
+
 impl ConfigValueType {
     pub fn infer_from(value: impl AsRef<str>) -> Self {
         let value = value.as_ref();
@@ -295,6 +295,7 @@ pub struct Enumeration {
 pub struct MetadataEntry {
     pub name: String,
     pub location: ConfigLocation,
+    pub is_autogenerated: bool,
     pub description: String,
     pub value_type: ConfigValueType,
     pub default_value: Option<ConfigVariant>,
@@ -308,6 +309,7 @@ impl Default for MetadataEntry {
                 IniFile::GameUserSettings,
                 IniSection::ServerSettings,
             ),
+            is_autogenerated: true,
             description: String::new(),
             value_type: ConfigValueType {
                 quantity: ConfigQuantity::Scalar,

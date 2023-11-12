@@ -10,12 +10,12 @@ use tracing::{error, trace, warn};
 
 use crate::{
     components::make_button,
-    icons,
+    config_utils::{self, merge_metadata}, icons,
     models::config::{
         get_locations, get_quantities, get_value_base_types, ConfigLocation, ConfigQuantity,
         ConfigValueBaseType, ConfigValueType, MetadataEntry,
     },
-    AppState, MainWindowMode, Message, config_utils,
+    AppState, MainWindowMode, Message,
 };
 
 pub enum MetadataEditContext {
@@ -80,14 +80,19 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
             let files = rfd::FileDialog::new()
                 .set_title("Select files to import...")
                 .set_directory(default_path)
-                .add_filter("Config Files", &[".ini"])
+                .add_filter("Config Files", &["ini"])
                 .pick_files();
             if let Some(files) = files {
                 for file in files {
                     if let Some(file) = file.to_str() {
                         match config_utils::import_config_file(file) {
-                            Ok((metadata, entries)) => (),
-                            Err(e) => error!("Failed to import config file {}", file)
+                            Ok((metadata, entries)) => {
+                                merge_metadata(&mut app_state.config_metadata, metadata);
+                            }
+                            
+                            Err(e) => {
+                                error!("Failed to import config file {}: {}", file, e.to_string())
+                            }
                         }
                     } else {
                         error!("Failed to convert folder");
