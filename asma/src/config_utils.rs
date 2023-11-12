@@ -2,6 +2,7 @@ use std::{ffi::OsStr, path::Path};
 
 use anyhow::{bail, Context, Result};
 use ini::Ini;
+use std::io::Write;
 use tantivy::{
     collector::TopDocs,
     doc,
@@ -23,11 +24,25 @@ pub fn load_config_metadata() -> Result<ConfigMetadata> {
     let mut metadata_path = get_default_global_settings_path();
     metadata_path.set_file_name("config_metadata.json");
 
+    trace!("Trying to config metadata from {}", metadata_path.display());
+
     let metadata_json = std::fs::File::open(&metadata_path)
         .with_context(|| format!("Failed to read metadata file {:?}", metadata_path))?;
 
     serde_json::from_reader(metadata_json)
         .with_context(|| format!("Failed to parse metadata file {:?}", metadata_path))
+}
+
+pub fn save_config_metadata(metadata: &ConfigMetadata) -> Result<()> {
+    let mut metadata_path = get_default_global_settings_path();
+    metadata_path.set_file_name("config_metadata.json");
+
+    let metadata_json = serde_json::to_string_pretty(metadata)
+        .with_context(|| "Failed to convert ConfigMetadata to JSON")?;
+
+    std::fs::File::create(&metadata_path)
+        .and_then(|mut f| f.write_all(metadata_json.as_bytes()))
+        .with_context(|| format!("Failed to create metadata file {}", metadata_path.display()))
 }
 
 pub(crate) fn import_config_file(file: impl AsRef<str>) -> Result<(ConfigMetadata, ConfigEntries)> {
@@ -189,7 +204,9 @@ fn add_metadata_entries_to_index<'a>(
         index_writer.add_document(document)?;
         index_count += 1;
     }
-    index_writer.commit().with_context(|| "Failed to commit index update")?;
+    index_writer
+        .commit()
+        .with_context(|| "Failed to commit index update")?;
     trace!("Indexed {} metadata entries", index_count);
     Ok(())
 }

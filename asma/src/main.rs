@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use components::{make_button, server_card};
-use config_utils::create_metadata_index;
+use config_utils::{create_metadata_index, rebuild_index_with_metadata};
 use dialogs::global_settings::{self, GlobalSettingsMessage};
 use dialogs::metadata_editor::{self, MetadataEditorMessage, MetadataEditContext};
 use dialogs::server_settings::{self, ServerSettingsMessage};
@@ -230,7 +230,8 @@ impl Application for AppState {
             SteamCmdState::NotInstalled
         };
 
-        
+        let mut config_index = create_metadata_index();
+        rebuild_index_with_metadata(&mut config_index, &config_metadata.entries).expect("Failed to build config metadata index");
 
         (
             AppState {
@@ -245,7 +246,7 @@ impl Application for AppState {
                     steamcmd_state,
                 },
                 config_metadata,
-                config_index: create_metadata_index(),
+                config_index,
                 servers,
                 mode: MainWindowMode::Servers,
             },

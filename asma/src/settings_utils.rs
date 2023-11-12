@@ -62,12 +62,12 @@ pub(crate) fn get_default_global_settings_path() -> PathBuf {
     };
 
     global_settings_path.push("global_settings.json");
-    trace!("Global Settings path is {:?}", &global_settings_path);
+    //trace!("Global Settings path is {}", global_settings_path.display());
     global_settings_path
 }
 
 fn load_global_settings_from(path: impl AsRef<str>) -> Result<GlobalSettings> {
-    trace!("Trying to loading global settings from {}", path.as_ref());
+    trace!("Trying to load global settings from {}", path.as_ref());
     let global_settings = std::fs::read_to_string(path.as_ref())?;
     let mut global_settings: GlobalSettings =
         serde_json::from_str(&global_settings).map_err(|e| {
