@@ -29,7 +29,7 @@ zip = "0.6.6"
 # iced= { version = "0.10.0", features = [ "advanced", "image", "debug", "tokio" ] }
 # iced = { path = "../../iced", features = [ "advanced", "image", "debug", "tokio" ]}
 iced = { git = "https://github.com/ChronosWS/iced.git", branch = "chronosws-winit", features = [ "advanced", "image", "debug", "tokio" ]}
-
+tantivy = "0.21.1"
 
 [build-dependencies]
 anyhow = "1.0.75"

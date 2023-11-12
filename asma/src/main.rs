@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use components::{make_button, server_card};
+use config_utils::create_metadata_index;
 use dialogs::global_settings::{self, GlobalSettingsMessage};
 use dialogs::metadata_editor::{self, MetadataEditorMessage, MetadataEditContext};
 use dialogs::server_settings::{self, ServerSettingsMessage};
@@ -17,6 +18,7 @@ use models::config::{ConfigEntries, ConfigMetadata};
 use server_utils::{UpdateServerProgress, ValidationResult};
 use steamcmd_utils::validate_steamcmd;
 use sysinfo::{System, SystemExt};
+use tantivy::Index;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tracing::{error, trace, warn, Level};
@@ -63,6 +65,7 @@ struct AppState {
     global_settings: GlobalSettings,
     global_state: GlobalState,
     config_metadata: ConfigMetadata,
+    config_index: Index,
     servers: Vec<Server>,
     mode: MainWindowMode,
 }
@@ -227,6 +230,8 @@ impl Application for AppState {
             SteamCmdState::NotInstalled
         };
 
+        
+
         (
             AppState {
                 async_sender: None,
@@ -240,6 +245,7 @@ impl Application for AppState {
                     steamcmd_state,
                 },
                 config_metadata,
+                config_index: create_metadata_index(),
                 servers,
                 mode: MainWindowMode::Servers,
             },
@@ -509,7 +515,7 @@ impl Application for AppState {
                 Command::none()
             }
             Message::AsyncNotification(AsyncNotification::UpdateServerRunState(id, run_state)) => {
-                trace!("UpdateServerRunState {}: {:?}", id, run_state);
+                //trace!("UpdateServerRunState {}: {:?}", id, run_state);
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");

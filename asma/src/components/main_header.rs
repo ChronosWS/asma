@@ -30,13 +30,17 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
                     icons::SETTINGS.clone()
                 )
             ]
+            .spacing(5)
             .padding(5)
+            .align_items(Alignment::Center)
         ],
         horizontal_space(Length::Fill),
         column![
             text("My Public IP"),
             text(global_state.local_ip.to_string())
         ]
+        .spacing(5)
+        .padding(5)
         .align_items(Alignment::Center),
         horizontal_space(Length::Fill),
         column![
@@ -45,6 +49,8 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
             text("Auto-Update: Unknown"),
             text("Discord Bot: Disabled"),
         ]
+        .spacing(5)
+        .padding(5)
         .align_items(Alignment::Center)
     ]
     .padding(5)

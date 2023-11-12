@@ -104,13 +104,13 @@ pub async fn monitor_server(
                                 RunState::Available(run_data),
                             ))
                             .await;
-                        trace!(
-                            "{}: PID: {} CPU: {} MEM: {}",
-                            server_id,
-                            pid.as_u32(),
-                            process.cpu_usage(),
-                            process.memory()
-                        );
+                        // trace!(
+                        //     "{}: PID: {} CPU: {} MEM: {}",
+                        //     server_id,
+                        //     pid.as_u32(),
+                        //     process.cpu_usage(),
+                        //     process.memory()
+                        // );
                     }
                     other => {
                         trace!("{}: Other Status: {:?}.  Bailing...", server_id, other);

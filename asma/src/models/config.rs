@@ -326,6 +326,25 @@ pub struct ConfigMetadata {
     pub entries: Vec<MetadataEntry>,
 }
 
+impl ConfigMetadata {
+    pub fn find_entry(
+        &self,
+        name: impl AsRef<str>,
+        location: &ConfigLocation,
+    ) -> Option<(usize, &MetadataEntry)> {
+        let name = name.as_ref();
+        self.entries
+            .iter()
+            .enumerate()
+            .find(|(_, entry)| entry.name.as_str() == name && entry.location == *location)
+    }
+
+    pub fn find_enum(&self, name: impl AsRef<str>) -> Option<(usize, &Enumeration)> {
+        let name = name.as_ref();
+        self.enums.iter().enumerate().find(|(_, e)| e.name.as_str() == name)
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct ConfigEntry {
     pub meta_name: String,
