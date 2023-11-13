@@ -14,6 +14,7 @@ use crate::{
     config_utils::query_metadata_index,
     icons,
     models::config::{ConfigEntry, ConfigVariant},
+    server_utils::update_inis_from_settings,
     settings_utils::save_server_settings_with_error,
     AppState, MainWindowMode, Message,
 };
@@ -84,7 +85,12 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
             }
             ServerSettingsMessage::CloseServerSettings => {
                 if let Some(server) = app_state.servers.get(server_id) {
-                    save_server_settings_with_error(&app_state.global_settings, &server.settings)
+                    save_server_settings_with_error(&app_state.global_settings, &server.settings);
+                    if let Err(e) =
+                        update_inis_from_settings(&app_state.config_metadata, &server.settings)
+                    {
+                        error!("Failed to save ini files: {}", e.to_string());
+                    }
                 }
                 app_state.mode = MainWindowMode::Servers;
                 Command::none()
@@ -265,10 +271,7 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
             ServerSettingsMessage::ValueChanged { value, .. } => {
                 trace!("Interim value: {}", value);
                 if let MainWindowMode::EditProfile(ServerSettingsContext {
-                    edit_context:
-                        ServerSettingsEditContext::Editing {
-                            current_value, ..
-                        },
+                    edit_context: ServerSettingsEditContext::Editing { current_value, .. },
                     ..
                 }) = &mut app_state.mode
                 {

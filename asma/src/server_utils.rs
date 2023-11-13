@@ -1,9 +1,11 @@
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Local};
+use ini::Ini;
 use regex::Regex;
 use sysinfo::{Pid, PidExt, ProcessExt, ProcessStatus, System, SystemExt};
 
 use std::{
+    collections::HashMap,
     io::ErrorKind,
     path::{Path, PathBuf},
     process::Stdio,
@@ -25,7 +27,7 @@ use crate::{
     models::{
         config::{
             ConfigLocation, ConfigMetadata, ConfigQuantity, ConfigValue, ConfigValueBaseType,
-            ConfigValueType, ConfigVariant,
+            ConfigValueType, ConfigVariant, IniFile,
         },
         RunData, RunState, ServerSettings,
     },
@@ -185,7 +187,8 @@ pub fn generate_command_line(
         map
     } else {
         None
-    }.with_context(|| "Failed to find required MapName setting")?;
+    }
+    .with_context(|| "Failed to find required MapName setting")?;
 
     let url_params = settings_meta_map
         .iter()
@@ -226,6 +229,71 @@ pub fn generate_command_line(
     args.extend(switch_params);
 
     Ok(args)
+}
+
+pub fn update_inis_from_settings(
+    _config_metadata: &ConfigMetadata,
+    server_settings: &ServerSettings,
+) -> Result<()> {
+    let installation_dir = server_settings.get_full_installation_location();
+    let ini_settings = server_settings
+        .config_entries
+        .entries
+        .iter()
+        .map(|e| {
+            if let ConfigLocation::IniOption(file, section) = &e.meta_location {
+                Some((file, section, e))
+            } else {
+                None
+            }
+        })
+        .filter(Option::is_some)
+        .map(Option::unwrap)
+        .collect::<Vec<_>>();
+
+    fn ini_file_name(installation_dir: &str, file: &IniFile) -> PathBuf {
+        Path::new(installation_dir)
+            .join("ShooterGame/Saved/Config/WindowsServer")
+            .join(file.to_string())
+            .with_extension("ini")
+            .canonicalize()
+            .expect("Failed to canonicalize path")
+    }
+
+    let mut ini_files = HashMap::new();
+    for (file, section, entry) in ini_settings {
+        match ini_files
+            .entry(file)
+            .or_insert_with(|| Ini::load_from_file(ini_file_name(&installation_dir, file)))
+        {
+            Ok(ini) => {
+                trace!(
+                    "Setting {}:[{}] {} = {}",
+                    file.to_string(),
+                    section.to_string(),
+                    entry.meta_name,
+                    entry.value
+                );
+                ini.set_to(
+                    Some(section.to_string()),
+                    entry.meta_name.to_owned(),
+                    entry.value.to_string(),
+                );
+            }
+            Err(e) => bail!("Failed to load ini file: {}", e.to_string()),
+        }
+    }
+
+    for (file, ini_result) in ini_files.drain() {
+        if let Ok(ini) = ini_result {
+            let file_name = ini_file_name(&installation_dir, file);
+            trace!("Writing INI file {}", file_name.display());
+            ini.write_to_file(&file_name)
+                .with_context(|| format!("Failed to write ini file {}", file_name.display()))?;
+        }
+    }
+
+    Ok(())
 }
 
 /// Starts the server, returns the PID of the running process

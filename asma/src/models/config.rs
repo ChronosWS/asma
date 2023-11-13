@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 // TODO: Potentially use Tantivy https://docs.rs/tantivy/0.21.1/tantivy/
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, Hash)]
 pub enum IniFile {
     Game,
     GameUserSettings,
@@ -399,10 +399,6 @@ impl ConfigEntries {
             .iter()
             .enumerate()
             .find(|(_, e)| e.meta_location == *location && e.meta_name == name)
-    }
-
-    pub fn find_from_metadata(&self, metadata: &MetadataEntry) -> Option<(usize, &ConfigEntry)> {
-        self.find(&metadata.name, &metadata.location)
     }
 }
 
