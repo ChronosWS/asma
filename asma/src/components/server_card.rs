@@ -93,6 +93,11 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                                 "Validate",
                                 Some(Message::InstallServer(server.id(), UpdateMode::Validate)),
                                 icons::VALIDATE.clone(),
+                            ),
+                            make_button(
+                                "Start",
+                                Some(Message::StartServer(server.id())),
+                                icons::START.clone(),
                             )
                         ]
                         .spacing(5)

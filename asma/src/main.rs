@@ -317,22 +317,27 @@ impl Application for AppState {
                 let server_settings = self
                     .get_server_settings(id)
                     .expect("Failed to look up server settings");
-                Command::perform(
-                    start_server(
-                        id,
-                        server_settings.name.clone(),
-                        server_settings.get_full_installation_location(),
-                        server_settings.map.clone(),
-                        server_settings.port,
+                match server_utils::generate_command_line(&self.config_metadata, server_settings) {
+                    Ok(args) => Command::perform(
+                        start_server(
+                            id,
+                            server_settings.name.clone(),
+                            server_settings.get_full_installation_location(),
+                            args,
+                        ),
+                        move |res| match res {
+                            Ok(_) => Message::ServerRunStateChanged(id, RunState::Starting),
+                            Err(e) => {
+                                error!("Failed to start server: {}", e.to_string());
+                                Message::ServerRunStateChanged(id, RunState::Stopped)
+                            }
+                        },
                     ),
-                    move |res| match res {
-                        Ok(_) => Message::ServerRunStateChanged(id, RunState::Starting),
-                        Err(e) => {
-                            error!("Failed to start server: {}", e.to_string());
-                            Message::ServerRunStateChanged(id, RunState::Stopped)
-                        }
-                    },
-                )
+                    Err(e) => {
+                        error!("Failed to get command line: {}", e.to_string());
+                        Command::none()
+                    }
+                }
             }
             Message::ServerRunStateChanged(id, run_state) => {
                 trace!("Server Run State Changed {}", id);
@@ -403,7 +408,9 @@ impl Application for AppState {
                     .expect("Failed to look up server settings");
                 self.mode = MainWindowMode::EditProfile(ServerSettingsContext {
                     server_id: id,
-                    edit_context: server_settings::ServerSettingsEditContext::NotEditing { query: String::new() },
+                    edit_context: server_settings::ServerSettingsEditContext::NotEditing {
+                        query: String::new(),
+                    },
                 });
                 Command::none()
             }
@@ -530,7 +537,14 @@ impl Application for AppState {
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
-                server_state.run_state = run_state;
+                let original_state = server_state.run_state.to_owned();
+                server_state.run_state = run_state.to_owned();
+                if let RunState::Available(_) = run_state {
+                    if let RunState::Stopping = server_state.run_state {
+                        server_state.run_state = original_state;
+                    }
+                }
+
                 Command::none()
             }
         }

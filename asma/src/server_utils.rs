@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Local};
 use regex::Regex;
 use sysinfo::{Pid, PidExt, ProcessExt, ProcessStatus, System, SystemExt};
@@ -22,7 +22,13 @@ use tracing::{error, trace, warn};
 use uuid::Uuid;
 
 use crate::{
-    models::{RunData, RunState},
+    models::{
+        config::{
+            ConfigLocation, ConfigMetadata, ConfigQuantity, ConfigValue, ConfigValueBaseType,
+            ConfigValueType, ConfigVariant,
+        },
+        RunData, RunState, ServerSettings,
+    },
     AsyncNotification,
 };
 
@@ -132,13 +138,102 @@ pub async fn monitor_server(
     Ok(())
 }
 
+pub fn generate_command_line(
+    config_metadata: &ConfigMetadata,
+    server_settings: &ServerSettings,
+) -> Result<Vec<String>> {
+    let mut args: Vec<String> = Vec::new();
+
+    // Map metadata to each entry
+    let settings_meta_map: Vec<_> = server_settings
+        .config_entries
+        .entries
+        .iter()
+        .map(|e| {
+            config_metadata
+                .find_entry(&e.meta_name, &e.meta_location)
+                .and_then(|(_, m)| {
+                    Some((e, m)).or_else(|| {
+                        error!(
+                            "Failed to find metadata entry {} {} for config entry",
+                            e.meta_name, e.meta_location
+                        );
+                        None
+                    })
+                })
+        })
+        .filter(|v| v.is_some())
+        .map(Option::unwrap)
+        .collect();
+
+    if settings_meta_map.len() < server_settings.config_entries.entries.len() {
+        bail!("One or more config entries did not have a metadata mapping")
+    }
+
+    let map = if let Some(map) = settings_meta_map
+        .iter()
+        .find(|(e, _)| e.meta_location == ConfigLocation::MapName)
+        .map(|(e, _)| e.value.to_string())
+    {
+        Some(map)
+    } else if let Some(map) = config_metadata
+        .entries
+        .iter()
+        .find(|e| e.location == ConfigLocation::MapName)
+        .map(|e| e.default_value.as_ref().map(|e| e.to_string()))
+    {
+        map
+    } else {
+        None
+    }.with_context(|| "Failed to find required MapName setting")?;
+
+    let url_params = settings_meta_map
+        .iter()
+        .filter(|(e, _)| e.meta_location == ConfigLocation::MapUrlOption)
+        .map(|(e, _)| format!("{}={}", e.meta_name, e.value.to_string()))
+        .collect::<Vec<_>>()
+        .join("?");
+
+    let switch_params = settings_meta_map
+        .iter()
+        .filter(|(e, _)| e.meta_location == ConfigLocation::CommandLineOption)
+        .map(|(e, m)| {
+            if let ConfigValueType {
+                quantity: ConfigQuantity::Scalar,
+                base_type: ConfigValueBaseType::Bool,
+            } = m.value_type
+            {
+                if let ConfigVariant::Scalar(ConfigValue::Bool(b)) = e.value {
+                    if b {
+                        format!("-{}", e.meta_name)
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    error!(
+                        "Config entry {} actual type doesn't match metadata type",
+                        e.meta_name
+                    );
+                    String::new()
+                }
+            } else {
+                format!("-{}={}", e.meta_name, e.value.to_string())
+            }
+        })
+        .map(|s| s.into());
+
+    args.push(format!("{}?{}", map, url_params).into());
+    args.extend(switch_params);
+
+    Ok(args)
+}
+
 /// Starts the server, returns the PID of the running process
 pub async fn start_server(
     server_id: Uuid,
     server_name: impl AsRef<str>,
     installation_dir: impl AsRef<str>,
-    map: impl AsRef<str>,
-    port: u16,
+    args: Vec<String>,
 ) -> Result<()> {
     let installation_dir = installation_dir.as_ref();
     let exe = Path::new(installation_dir)
@@ -147,18 +242,13 @@ pub async fn start_server(
         .expect("Failed to canonicalize path");
 
     let _profile_descriptor = format!("\"ASA.{}.{}\"", server_id.to_string(), server_name.as_ref());
-    let args = [
-        //&format!("\"ASA.{}.{}\"", server_id.to_string(), server_name.as_ref()),
-        //exe.to_str().expect("Failed to convert path to string"),
-        //"/NORMAL",
-        &format!("{}?Port={}", map.as_ref(), port),
-    ];
 
     // If we want to tag the process with metadata, we either need to force set the title after launch,
     // or run it via a batch file using `start "<profile_descriptor>"` ...
     let mut command = Command::new(exe);
     command.args(args);
     let command_string = format!("{:?}", command);
+    trace!("Launching server: {}", command_string);
     let child = command
         .spawn()
         .map_err(|e| {
@@ -372,4 +462,3 @@ pub async fn validate_server(
         DateTime::from(metadata.created().with_context(|| "No Creation Time")?);
     Ok(ValidationResult::Success(created_time.to_rfc3339()))
 }
-

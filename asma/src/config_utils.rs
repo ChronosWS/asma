@@ -2,6 +2,7 @@ use std::{ffi::OsStr, path::Path};
 
 use anyhow::{bail, Context, Result};
 use ini::Ini;
+use serde_json::Map;
 use std::io::Write;
 use tantivy::{
     collector::TopDocs,
@@ -188,10 +189,9 @@ fn add_metadata_entries_to_index<'a>(
     let mut index_count = 0;
     for metadata in entries {
         let location_json = serde_json::to_value(&metadata.location)?;
-        let location_map = location_json
-            .as_object()
-            .expect("Failed to convert location to JSON object")
-            .to_owned();
+        let mut location_map = Map::new();
+        location_map.insert("Location".into(), location_json);
+
         let mut document = doc!(
             name => metadata.name.to_owned(),
             description => metadata.description.to_owned(),
@@ -253,13 +253,15 @@ pub fn query_metadata_index(index: &Index, query: &str) -> Result<Vec<QueryResul
                 .as_text()
                 .expect("Failed to extract text from name value")
                 .to_owned(),
-            location: serde_json::from_value(serde_json::Value::Object(
+            location: serde_json::from_value(
                 d.get_first(location)
                     .expect("Failed to extract location field")
                     .as_json()
                     .expect("Failed to extract json from location value")
+                    .get("Location")
+                    .expect("Failed to find location key")
                     .to_owned(),
-            ))
+            )
             .expect("Failed to convert location into ConfigLocation"),
         })
         .collect::<Vec<QueryResult>>();

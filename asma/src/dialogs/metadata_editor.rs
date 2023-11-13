@@ -172,12 +172,9 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
                 metadata.name = name_content.to_owned();
                 metadata.description = description_content.text();
 
-                let metadata = app_state
+                rebuild_index_with_metadata(&mut app_state.config_index, &app_state
                     .config_metadata
-                    .entries
-                    .get(*metadata_id)
-                    .expect("Failed to look up metadata by index");
-                rebuild_index_with_metadata(&mut app_state.config_index, [metadata])
+                    .entries)
                     .unwrap_or_else(|e| error!("Failed to re-index: {}", e.to_string()));
                 app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
                     query: from_query.to_owned(),
