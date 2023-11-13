@@ -9,26 +9,37 @@ build = "build.rs"
 
 [dependencies]
 anyhow = "1.0.75"
+uuid = { version = "1.5.0", features = [ "v4", "serde" ] }
 chrono = "0.4.31"
 static_init = "1.0.3"
 once_cell = "1.18.0"
-rfd = "0.12.1"
+# Json serialization support
 serde = { version = "1.0.190", features = [ "derive"] }
 serde_json = "1.0.108"
+# Ini file support
 rust-ini = "0.20.0"
-uuid = { version = "1.5.0", features = [ "v4", "serde" ] }
-futures-util = "0.3.29"
-process_path = "0.1.4"
+
+# Regex support
 regex = "1.10.2"
+# Web access
 reqwest = { version = "0.11", features = ["json", "stream" ] }
+# System and process information
 sysinfo = "0.29.10"
+process_path = "0.1.4"
+# Async runtime
 tokio = { version = "1.33.0", features = ["full"] }
+futures-util = "0.3.29"
+# Logging and Tracing
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.17", features = [ "env-filter"] }
 zip = "0.6.6"
+# UI Framework
 # iced= { version = "0.10.0", features = [ "advanced", "image", "debug", "tokio" ] }
 # iced = { path = "../../iced", features = [ "advanced", "image", "debug", "tokio" ]}
 iced = { git = "https://github.com/ChronosWS/iced.git", branch = "chronosws-winit", features = [ "advanced", "image", "debug", "tokio" ]}
+# Support for system file dialogs
+rfd = "0.12.1"
+# Search functionality
 tantivy = "0.21.1"
 
 [build-dependencies]
