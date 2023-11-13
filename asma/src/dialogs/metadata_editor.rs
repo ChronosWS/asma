@@ -172,10 +172,11 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
                 metadata.name = name_content.to_owned();
                 metadata.description = description_content.text();
 
-                rebuild_index_with_metadata(&mut app_state.config_index, &app_state
-                    .config_metadata
-                    .entries)
-                    .unwrap_or_else(|e| error!("Failed to re-index: {}", e.to_string()));
+                rebuild_index_with_metadata(
+                    &mut app_state.config_index,
+                    &app_state.config_metadata.entries,
+                )
+                .unwrap_or_else(|e| error!("Failed to re-index: {}", e.to_string()));
                 app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
                     query: from_query.to_owned(),
                 });
@@ -244,7 +245,16 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
             };
             Command::none()
         }
-        MetadataEditorMessage::DescriptionChanged(_) => Command::none(),
+        MetadataEditorMessage::DescriptionChanged(action) => {
+            if let MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                description_content,
+                ..
+            }) = &mut app_state.mode
+            {
+                description_content.perform(action);
+            }
+            Command::none()
+        }
         MetadataEditorMessage::LocationChanged(location) => {
             trace!("Selected location {}", location);
             if let MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
@@ -460,12 +470,14 @@ pub(crate) fn make_dialog<'a>(
                                 text(r.location.to_string()),
                                 make_button(
                                     "Edit",
-                                    Some(MetadataEditorMessage::EditMetadataEntry {
-                                        from_query: query.to_owned(),
-                                        name: r.name.to_owned(),
-                                        location: r.location.to_owned()
-                                    }
-                                    .into()),
+                                    Some(
+                                        MetadataEditorMessage::EditMetadataEntry {
+                                            from_query: query.to_owned(),
+                                            name: r.name.to_owned(),
+                                            location: r.location.to_owned()
+                                        }
+                                        .into()
+                                    ),
                                     icons::EDIT.clone()
                                 )
                             ]
