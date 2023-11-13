@@ -37,6 +37,8 @@ pub fn save_config_metadata(metadata: &ConfigMetadata) -> Result<()> {
     let mut metadata_path = get_default_global_settings_path();
     metadata_path.set_file_name("config_metadata.json");
 
+    trace!("Saving config metadata to {}", metadata_path.display());
+
     let metadata_json = serde_json::to_string_pretty(metadata)
         .with_context(|| "Failed to convert ConfigMetadata to JSON")?;
 
@@ -91,6 +93,7 @@ pub(crate) fn import_config_file(file: impl AsRef<str>) -> Result<(ConfigMetadat
 
             let config_entry = ConfigEntry {
                 meta_name: key.to_owned(),
+                meta_location: location.clone(),
                 value: default_value.clone(),
             };
             config_entries.entries.push(config_entry);

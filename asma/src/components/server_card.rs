@@ -3,10 +3,7 @@ use iced::{
     Alignment, Background, BorderRadius, Color, Element, Length, Theme,
 };
 
-use crate::{
-    dialogs::server_settings::ServerSettingsMessage, file_utils, icons, models::*,
-    server_utils::UpdateMode, Message,
-};
+use crate::{file_utils, icons, models::*, server_utils::UpdateMode, Message};
 
 use super::make_button;
 
@@ -24,14 +21,14 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
         RunState::NotInstalled => container(horizontal_space(Length::Shrink)),
         RunState::Stopped => container(make_button(
             "Start",
-            Message::StartServer(server.id()),
+            Some(Message::StartServer(server.id())),
             icons::START.clone(),
         )),
         RunState::Starting => container(row![
             text("Starting..."),
             make_button(
                 "Stop",
-                Message::StopServer(server.id()),
+                Some(Message::StopServer(server.id())),
                 icons::STOP.clone()
             )
         ]),
@@ -44,25 +41,23 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                         "CPU: {:.2} MEM: {}{}",
                         run_data.cpu_usage, mem, unit
                     )),
+                    horizontal_space(Length::Fill),
                     make_button(
                         "Stop",
-                        Message::StopServer(server.id()),
+                        Some(Message::StopServer(server.id())),
                         icons::STOP.clone()
                     )
                 ]
-                .align_items(Alignment::Center)
-                .padding(5),
+                .spacing(5)
+                .padding(5)
+                .align_items(Alignment::Center),
             )
         }
     };
 
     let install_state_content =
         if !file_utils::directory_exists(&server.settings.installation_location) {
-            container(make_button(
-                "Set Install Location...",
-                ServerSettingsMessage::SetServerInstallationDirectory(server.id()).into(),
-                icons::FOLDER_OPEN.clone(),
-            ))
+            container(text("Set an installation location first"))
         } else {
             match &server.state.install_state {
                 InstallState::NotInstalled => container(
@@ -71,7 +66,7 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                             "Install to: {}",
                             server.settings.get_full_installation_location()
                         ),
-                        Message::InstallServer(server.id(), UpdateMode::Update),
+                        Some(Message::InstallServer(server.id(), UpdateMode::Update)),
                         icons::DOWNLOAD.clone(),
                     )
                     .width(Length::Fill),
@@ -88,31 +83,39 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                     if let RunState::Stopped = server.state.run_state {
                         row![
                             text(format!("Last Updated: {}", version)),
+                            horizontal_space(Length::Fill),
                             make_button(
                                 "Update",
-                                Message::InstallServer(server.id(), UpdateMode::Update),
+                                Some(Message::InstallServer(server.id(), UpdateMode::Update)),
                                 icons::UP.clone(),
                             ),
                             make_button(
                                 "Validate",
-                                Message::InstallServer(server.id(), UpdateMode::Validate),
+                                Some(Message::InstallServer(server.id(), UpdateMode::Validate)),
                                 icons::VALIDATE.clone(),
                             )
                         ]
+                        .spacing(5)
+                        .padding(5)
                     } else {
                         row![text(format!("Last Updated: {}", version))]
+                            .spacing(5)
+                            .padding(5)
                     }
                     .align_items(Alignment::Center),
                 ),
                 InstallState::FailedValidation(reason) => container(
                     row![
                         text(format!("Validation failed: {}", reason)).width(Length::Fill),
+                        horizontal_space(Length::Fill),
                         make_button(
                             "Re-install",
-                            Message::InstallServer(server.id(), UpdateMode::Update),
+                            Some(Message::InstallServer(server.id(), UpdateMode::Update)),
                             icons::DOWNLOAD.clone(),
                         )
                     ]
+                    .spacing(5)
+                    .padding(5)
                     .align_items(Alignment::Center),
                 ),
             }
@@ -133,10 +136,12 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                 horizontal_space(Length::Fill),
                 make_button(
                     "Edit...",
-                    Message::EditServer(server.settings.id),
+                    Some(Message::EditServer(server.settings.id)),
                     icons::EDIT.clone()
                 )
             ]
+            .spacing(5)
+            .padding(5)
             .align_items(Alignment::Center),
             state_content.align_items(Alignment::Center)
         ]

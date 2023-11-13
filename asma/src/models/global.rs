@@ -1,5 +1,4 @@
 use serde::{Serialize, Deserialize};
-use uuid::Uuid;
 
 use super::{ThemeType, LocalIp};
 
@@ -32,7 +31,6 @@ pub struct GlobalSettings {
 pub struct GlobalState {
     pub app_version: String,
     pub local_ip: LocalIp,
-    pub edit_server_id: Option<Uuid>,
     pub edit_metadata_id: Option<usize>,
     pub steamcmd_state: SteamCmdState,
 }

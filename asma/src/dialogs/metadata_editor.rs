@@ -27,6 +27,7 @@ pub enum MetadataEditContext {
         query: String,
     },
     Editing {
+        from_query: String,
         metadata_id: usize,
         name_content: String,
         description_content: text_editor::Content,
@@ -42,7 +43,9 @@ pub enum MetadataEditorMessage {
 
     QueryChanged(String),
     AddMetadataEntry,
+
     EditMetadataEntry {
+        from_query: String,
         name: String,
         location: ConfigLocation,
     },
@@ -127,25 +130,31 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
         }
         MetadataEditorMessage::DeleteEntry => {
             if let MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                from_query,
                 metadata_id,
                 ..
-            }) = app_state.mode
+            }) = &app_state.mode
             {
                 warn!("Discarding entry by user command");
-                app_state.config_metadata.entries.remove(metadata_id);
+                app_state.config_metadata.entries.remove(*metadata_id);
                 rebuild_index_with_metadata(
                     &mut app_state.config_index,
                     &app_state.config_metadata.entries,
                 )
-                .unwrap_or_else(|e| error!("Failed to re-index: {}", e.to_string()))
+                .unwrap_or_else(|e| error!("Failed to re-index: {}", e.to_string()));
+                app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
+                    query: from_query.to_owned(),
+                });
+            } else {
+                app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
+                    query: String::new(),
+                });
             }
-            app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
-                query: String::new(),
-            });
             Command::none()
         }
         MetadataEditorMessage::SaveEntry => {
             if let MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                from_query,
                 metadata_id,
                 description_content,
                 name_content,
@@ -169,17 +178,30 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
                     .get(*metadata_id)
                     .expect("Failed to look up metadata by index");
                 rebuild_index_with_metadata(&mut app_state.config_index, [metadata])
-                    .unwrap_or_else(|e| error!("Failed to re-index: {}", e.to_string()))
+                    .unwrap_or_else(|e| error!("Failed to re-index: {}", e.to_string()));
+                app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
+                    query: from_query.to_owned(),
+                });
+            } else {
+                app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
+                    query: String::new(),
+                });
             }
-            app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
-                query: String::new(),
-            });
             Command::none()
         }
         MetadataEditorMessage::CancelEntry => {
-            app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
-                query: String::new(),
-            });
+            if let MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                from_query, ..
+            }) = &app_state.mode
+            {
+                app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
+                    query: from_query.to_owned(),
+                })
+            } else {
+                app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::NotEditing {
+                    query: String::new(),
+                })
+            }
             Command::none()
         }
         MetadataEditorMessage::AddMetadataEntry => {
@@ -188,18 +210,24 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
             app_state.config_metadata.entries.push(new_metadata);
             let metadata_id = app_state.config_metadata.entries.len() - 1;
             app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                from_query: String::new(),
                 metadata_id,
                 description_content,
                 name_content: "NewEntry".to_owned(),
             });
             Command::none()
         }
-        MetadataEditorMessage::EditMetadataEntry { name, location } => {
+        MetadataEditorMessage::EditMetadataEntry {
+            from_query,
+            name,
+            location,
+        } => {
             if let Some((metadata_id, metadata)) =
                 app_state.config_metadata.find_entry(&name, &location)
             {
                 let description_content = text_editor::Content::with_text(&metadata.description);
                 app_state.mode = MainWindowMode::MetadataEditor(MetadataEditContext::Editing {
+                    from_query,
                     metadata_id,
                     description_content,
                     name_content: metadata.name.to_owned(),
@@ -305,18 +333,18 @@ pub(crate) fn make_dialog<'a>(
         row![
             make_button(
                 "Import from INI",
-                MetadataEditorMessage::Import.into(),
+                Some(MetadataEditorMessage::Import.into()),
                 icons::DOWNLOAD.clone(),
             ),
             make_button(
                 "Add",
-                MetadataEditorMessage::AddMetadataEntry.into(),
+                Some(MetadataEditorMessage::AddMetadataEntry.into()),
                 icons::ADD.clone(),
             ),
             make_button(
                 "",
-                MetadataEditorMessage::CloseMetadataEditor.into(),
-                icons::CANCEL.clone(),
+                Some(MetadataEditorMessage::CloseMetadataEditor.into()),
+                icons::SAVE.clone(),
             )
         ]
         .padding(5)
@@ -326,17 +354,17 @@ pub(crate) fn make_dialog<'a>(
         row![
             make_button(
                 "Delete",
-                MetadataEditorMessage::DeleteEntry.into(),
+                Some(MetadataEditorMessage::DeleteEntry.into()),
                 icons::DELETE.clone(),
             ),
             make_button(
                 "Cancel",
-                MetadataEditorMessage::CancelEntry.into(),
+                Some(MetadataEditorMessage::CancelEntry.into()),
                 icons::CANCEL.clone(),
             ),
             make_button(
                 "Save",
-                MetadataEditorMessage::SaveEntry.into(),
+                Some(MetadataEditorMessage::SaveEntry.into()),
                 icons::SAVE.clone(),
             )
         ]
@@ -350,6 +378,7 @@ pub(crate) fn make_dialog<'a>(
             metadata_id,
             description_content,
             name_content,
+            ..
         } => {
             let metadata = app_state
                 .config_metadata
@@ -415,7 +444,9 @@ pub(crate) fn make_dialog<'a>(
         MetadataEditContext::NotEditing { query } => {
             let search_content = match query_metadata_index(&app_state.config_index, &query) {
                 Ok(results) => {
-                    trace!("Results: {}", results.len());
+                    if !results.is_empty() {
+                        trace!("Results: {}", results.len());
+                    }
                     let search_rows = results
                         .iter()
                         .map(|r| {
@@ -432,11 +463,12 @@ pub(crate) fn make_dialog<'a>(
                                 text(r.location.to_string()),
                                 make_button(
                                     "Edit",
-                                    MetadataEditorMessage::EditMetadataEntry {
+                                    Some(MetadataEditorMessage::EditMetadataEntry {
+                                        from_query: query.to_owned(),
                                         name: r.name.to_owned(),
                                         location: r.location.to_owned()
                                     }
-                                    .into(),
+                                    .into()),
                                     icons::EDIT.clone()
                                 )
                             ]

@@ -21,12 +21,12 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
             row![
                 make_button(
                     "Global Settings...",
-                    Message::GlobalSettings(GlobalSettingsMessage::OpenGlobalSettings),
+                    Some(Message::GlobalSettings(GlobalSettingsMessage::OpenGlobalSettings)),
                     icons::SETTINGS.clone()
                 ),
                 make_button(
                     "Config Metadata...",
-                    Message::MetadataEditor(MetadataEditorMessage::OpenMetadataEditor),
+                    Some(Message::MetadataEditor(MetadataEditorMessage::OpenMetadataEditor)),
                     icons::SETTINGS.clone()
                 )
             ]

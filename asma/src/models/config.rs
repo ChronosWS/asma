@@ -125,16 +125,24 @@ impl Display for ConfigValue {
 }
 
 impl ConfigValue {
-    pub fn from_type_and_value(value_type: &ConfigValueType, value: &str) -> Result<ConfigValue> {
+    pub fn from_type_and_value(value_type: &ConfigValueType, value: &str) -> Result<Self> {
         Ok(match &value_type.base_type {
-            ConfigValueBaseType::Bool => {
-                ConfigValue::Bool(ConfigValueBaseType::try_parse_bool(value)?)
-            }
-            ConfigValueBaseType::Integer => ConfigValue::Integer(value.parse::<i64>()?),
-            ConfigValueBaseType::Float => ConfigValue::Float(value.parse::<f32>()?),
-            ConfigValueBaseType::String => ConfigValue::String(value.to_owned()),
+            ConfigValueBaseType::Bool => Self::Bool(ConfigValueBaseType::try_parse_bool(value)?),
+            ConfigValueBaseType::Integer => Self::Integer(value.parse::<i64>()?),
+            ConfigValueBaseType::Float => Self::Float(value.parse::<f32>()?),
+            ConfigValueBaseType::String => Self::String(value.to_owned()),
             ConfigValueBaseType::Enum(_enum) => bail!("Enum parsing not supported yet"),
         })
+    }
+
+    pub fn default_from_type(value_type: &ConfigValueType) -> Self {
+        match &value_type.base_type {
+            ConfigValueBaseType::Bool => Self::Bool(false),
+            ConfigValueBaseType::Float => Self::Float(0.0),
+            ConfigValueBaseType::Integer => Self::Integer(0),
+            ConfigValueBaseType::String => Self::String(String::new()),
+            ConfigValueBaseType::Enum(_enum) => panic!("Enum construction not supported yet"),
+        }
     }
 }
 
@@ -170,6 +178,13 @@ impl ConfigVariant {
                 Self::Vector(values)
             }
         })
+    }
+
+    pub fn default_from_type(value_type: &ConfigValueType) -> Self {
+        match value_type.quantity {
+            ConfigQuantity::Scalar => Self::Scalar(ConfigValue::default_from_type(value_type)),
+            ConfigQuantity::Vector => Self::Vector(vec![]),
+        }
     }
 }
 
@@ -341,19 +356,54 @@ impl ConfigMetadata {
 
     pub fn find_enum(&self, name: impl AsRef<str>) -> Option<(usize, &Enumeration)> {
         let name = name.as_ref();
-        self.enums.iter().enumerate().find(|(_, e)| e.name.as_str() == name)
+        self.enums
+            .iter()
+            .enumerate()
+            .find(|(_, e)| e.name.as_str() == name)
     }
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct ConfigEntry {
     pub meta_name: String,
+    pub meta_location: ConfigLocation,
     pub value: ConfigVariant,
+}
+
+impl From<&MetadataEntry> for ConfigEntry {
+    fn from(value: &MetadataEntry) -> Self {
+        Self {
+            meta_name: value.name.to_owned(),
+            meta_location: value.location.to_owned(),
+            value: value
+                .default_value
+                .to_owned()
+                .unwrap_or_else(|| ConfigVariant::default_from_type(&value.value_type)),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Default)]
 pub struct ConfigEntries {
     pub entries: Vec<ConfigEntry>,
+}
+
+impl ConfigEntries {
+    pub fn find(
+        &self,
+        name: impl AsRef<str>,
+        location: &ConfigLocation,
+    ) -> Option<(usize, &ConfigEntry)> {
+        let name = name.as_ref();
+        self.entries
+            .iter()
+            .enumerate()
+            .find(|(_, e)| e.meta_location == *location && e.meta_name == name)
+    }
+
+    pub fn find_from_metadata(&self, metadata: &MetadataEntry) -> Option<(usize, &ConfigEntry)> {
+        self.find(&metadata.name, &metadata.location)
+    }
 }
 
 // TODO: Optimize this to only init once, likely from configs

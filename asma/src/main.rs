@@ -3,8 +3,8 @@ use std::sync::Arc;
 use components::{make_button, server_card};
 use config_utils::{create_metadata_index, rebuild_index_with_metadata};
 use dialogs::global_settings::{self, GlobalSettingsMessage};
-use dialogs::metadata_editor::{self, MetadataEditorMessage, MetadataEditContext};
-use dialogs::server_settings::{self, ServerSettingsMessage};
+use dialogs::metadata_editor::{self, MetadataEditContext, MetadataEditorMessage};
+use dialogs::server_settings::{self, ServerSettingsContext, ServerSettingsMessage};
 use fonts::{get_system_font_bytes, BOLD_FONT};
 use futures_util::SinkExt;
 use iced::alignment::{Horizontal, Vertical};
@@ -55,7 +55,7 @@ use crate::server_utils::{
 enum MainWindowMode {
     Servers,
     GlobalSettings,
-    EditProfile(Uuid),
+    EditProfile(ServerSettingsContext),
     MetadataEditor(MetadataEditContext),
 }
 
@@ -72,19 +72,22 @@ struct AppState {
 
 impl AppState {
     // TODO: These should probably just be changed to `get_server*` since settings
-    // and state often go together and interior mutability is a PITA.
+    // and state often go together and interior mutability is a PITA
+    pub fn find_server(&self, id: Uuid) -> Option<(usize, &ServerSettings)> {
+        self.servers
+            .iter()
+            .enumerate()
+            .find(|(_, s)| s.settings.id == id)
+            .map(|(i, s)| (i, &s.settings))
+    }
+
     pub fn get_server_settings(&self, id: Uuid) -> Option<&ServerSettings> {
         self.servers
             .iter()
             .find(|s| s.settings.id == id)
             .map(|s| &s.settings)
     }
-    pub fn get_server_settings_mut(&mut self, id: Uuid) -> Option<&mut ServerSettings> {
-        self.servers
-            .iter_mut()
-            .find(|s| s.settings.id == id)
-            .map(|s| &mut s.settings)
-    }
+
     pub fn get_server_state_mut(&mut self, id: Uuid) -> Option<&mut ServerState> {
         self.servers
             .iter_mut()
@@ -231,7 +234,8 @@ impl Application for AppState {
         };
 
         let mut config_index = create_metadata_index();
-        rebuild_index_with_metadata(&mut config_index, &config_metadata.entries).expect("Failed to build config metadata index");
+        rebuild_index_with_metadata(&mut config_index, &config_metadata.entries)
+            .expect("Failed to build config metadata index");
 
         (
             AppState {
@@ -241,7 +245,6 @@ impl Application for AppState {
                 global_state: GlobalState {
                     app_version: env!("CARGO_PKG_VERSION").into(),
                     local_ip: LocalIp::Unknown,
-                    edit_server_id: None,
                     edit_metadata_id: None,
                     steamcmd_state,
                 },
@@ -270,7 +273,7 @@ impl Application for AppState {
 
     fn subscription(&self) -> Subscription<Self::Message> {
         Subscription::batch([
-        //subscription::events().map(Message::Event),
+            //subscription::events().map(Message::Event),
             async_pump().map(Message::AsyncNotification),
         ])
     }
@@ -378,23 +381,30 @@ impl Application for AppState {
                         installation_location: String::new(),
                         map: "TheIsland_WP".into(),
                         port: 7777,
-                        config_entries: ConfigEntries::default()
+                        config_entries: ConfigEntries::default(),
                     },
                     state: ServerState::default(),
                 };
-                self.mode = MainWindowMode::EditProfile(server.settings.id);
-
-                //self.global_state.edit_server_id = Some(server.settings.id);
                 self.servers.push(server);
+
+                self.mode = MainWindowMode::EditProfile(ServerSettingsContext {
+                    server_id: self.servers.len() - 1,
+                    edit_context: server_settings::ServerSettingsEditContext::NotEditing {
+                        query: String::new(),
+                    },
+                });
+
                 Command::none()
             }
             Message::EditServer(id) => {
                 trace!("Edit Server {}", id);
-                let edit_server = self
-                    .get_server_settings(id)
+                let (id, _) = self
+                    .find_server(id)
                     .expect("Failed to look up server settings");
-                self.global_state.edit_server_id = Some(edit_server.id);
-                self.mode = MainWindowMode::EditProfile(id);
+                self.mode = MainWindowMode::EditProfile(ServerSettingsContext {
+                    server_id: id,
+                    edit_context: server_settings::ServerSettingsEditContext::NotEditing { query: String::new() },
+                });
                 Command::none()
             }
             Message::InstallServer(id, mode) => {
@@ -533,7 +543,7 @@ impl Application for AppState {
                 column![
                     row![make_button(
                         "New Server",
-                        Message::NewServer,
+                        Some(Message::NewServer),
                         icons::ADD.clone()
                     )],
                     if self.servers.is_empty() {
@@ -579,19 +589,18 @@ impl Application for AppState {
                     .on_blur(GlobalSettingsMessage::CloseGlobalSettings.into())
                     .into()
             }
-            MainWindowMode::MetadataEditor(edit_context) => {
-                Modal::new(main_content, dialogs::metadata_editor::make_dialog(&self, edit_context))
-                    .on_blur(MetadataEditorMessage::CloseMetadataEditor.into())
-                    .into()
-            }
-            MainWindowMode::EditProfile(server_id) => {
-                Modal::new(
-                    main_content,
-                    dialogs::server_settings::make_dialog(&self, *server_id),
-                )
-                .on_blur(ServerSettingsMessage::CloseServerSettings(*server_id).into())
-                .into()
-            }
+            MainWindowMode::MetadataEditor(edit_context) => Modal::new(
+                main_content,
+                dialogs::metadata_editor::make_dialog(&self, edit_context),
+            )
+            .on_blur(MetadataEditorMessage::CloseMetadataEditor.into())
+            .into(),
+            MainWindowMode::EditProfile(edit_context) => Modal::new(
+                main_content,
+                dialogs::server_settings::make_dialog(&self, edit_context),
+            )
+            .on_blur(ServerSettingsMessage::CloseServerSettings.into())
+            .into(),
         };
         if self.global_settings.debug_ui {
             result.explain(Color::BLACK)

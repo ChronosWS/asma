@@ -161,19 +161,19 @@ pub(crate) fn make_dialog<'a>(app_state: &AppState) -> Container<Message> {
         SteamCmdState::Installed | SteamCmdState::NotInstalled => row![
             make_button(
                 "Open...",
-                GlobalSettingsMessage::OpenSteamCmdDirectory.into(),
+                Some(GlobalSettingsMessage::OpenSteamCmdDirectory.into()),
                 icons::FOLDER_OPEN.clone()
             )
             .width(100),
             make_button(
                 "Update",
-                GlobalSettingsMessage::UpdateSteamCmd.into(),
+                Some(GlobalSettingsMessage::UpdateSteamCmd.into()),
                 icons::REFRESH.clone()
             )
             .width(100),
             make_button(
                 "Set Location...",
-                GlobalSettingsMessage::SetSteamCmdDirectory.into(),
+                Some(GlobalSettingsMessage::SetSteamCmdDirectory.into()),
                 icons::FOLDER_OPEN.clone()
             )
             .width(150)
@@ -188,7 +188,7 @@ pub(crate) fn make_dialog<'a>(app_state: &AppState) -> Container<Message> {
                 horizontal_space(Length::Fill),
                 make_button(
                     "",
-                    GlobalSettingsMessage::CloseGlobalSettings.into(),
+                    Some(GlobalSettingsMessage::CloseGlobalSettings.into()),
                     icons::SAVE.clone()
                 )
             ],
@@ -249,13 +249,13 @@ pub(crate) fn make_dialog<'a>(app_state: &AppState) -> Container<Message> {
                 horizontal_space(Length::Fill),
                 make_button(
                     "Open...",
-                    GlobalSettingsMessage::OpenProfilesDirectory.into(),
+                    Some(GlobalSettingsMessage::OpenProfilesDirectory.into()),
                     icons::FOLDER_OPEN.clone()
                 )
                 .width(100),
                 make_button(
                     "Set Location...",
-                    GlobalSettingsMessage::SetProfilesDirectory.into(),
+                    Some(GlobalSettingsMessage::SetProfilesDirectory.into()),
                     icons::FOLDER_OPEN.clone()
                 )
                 .width(150),

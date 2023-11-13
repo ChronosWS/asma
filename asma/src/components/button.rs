@@ -5,7 +5,7 @@ use iced::{
 
 pub fn make_button<'a>(
     inner_text: impl ToString,
-    message: crate::Message,
+    message: Option<crate::Message>,
     image: image::Handle,
 ) -> Button<'a, crate::Message> {
     let content: Element<'a, crate::Message> = if inner_text.to_string().is_empty() {
@@ -20,5 +20,11 @@ pub fn make_button<'a>(
         .spacing(5)
         .into()
     };
-    button(content).on_press(message)
+
+    let button = button(content);
+    if let Some(message) = message {
+        button.on_press(message)
+    } else {
+        button
+    }
 }

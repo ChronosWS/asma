@@ -372,3 +372,4 @@ pub async fn validate_server(
         DateTime::from(metadata.created().with_context(|| "No Creation Time")?);
     Ok(ValidationResult::Success(created_time.to_rfc3339()))
 }
+
