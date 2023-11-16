@@ -31,7 +31,7 @@ use crate::{
         },
         RunData, RunState, ServerSettings,
     },
-    AsyncNotification,
+    AsyncNotification, config_utils::ConfigMetadataState,
 };
 
 #[derive(Debug, Clone)]
@@ -141,11 +141,12 @@ pub async fn monitor_server(
 }
 
 pub fn generate_command_line(
-    config_metadata: &ConfigMetadata,
+    config_metadata: &ConfigMetadataState,
     server_settings: &ServerSettings,
 ) -> Result<Vec<String>> {
     let mut args: Vec<String> = Vec::new();
 
+    let config_metadata = config_metadata.effective();
     // Map metadata to each entry
     let settings_meta_map: Vec<_> = server_settings
         .config_entries

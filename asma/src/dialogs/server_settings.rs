@@ -87,7 +87,7 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                 if let Some(server) = app_state.servers.get(server_id) {
                     save_server_settings_with_error(&app_state.global_settings, &server.settings);
                     if let Err(e) =
-                        update_inis_from_settings(&app_state.config_metadata, &server.settings)
+                        update_inis_from_settings(&app_state.config_metadata_state.effective(), &server.settings)
                     {
                         error!("Failed to save ini files: {}", e.to_string());
                     }
@@ -145,7 +145,8 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                 trace!("Override Setting (Metadata {})", metadata_id);
                 if let Some(server) = app_state.servers.get_mut(server_id) {
                     let metadata = app_state
-                        .config_metadata
+                        .config_metadata_state
+                        .effective()
                         .entries
                         .get(metadata_id)
                         .expect("Failed to look up config metadata");
@@ -231,7 +232,8 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                     .get_mut(server_id)
                     .expect("Failed to find server");
                 let metadata = app_state
-                    .config_metadata
+                    .config_metadata_state
+                    .effective()
                     .entries
                     .get(metadata_id)
                     .expect("Failed to find config metadata");
@@ -328,7 +330,8 @@ pub(crate) fn make_dialog<'a>(
                                 }
                             );
                             let (metadata_id, _) = app_state
-                                .config_metadata
+                                .config_metadata_state
+                                .effective()
                                 .find_entry(&r.name, &r.location)
                                 .expect("Failed to look up metadata");
                             let buttons_content = if let Some((index, _)) = entry {
@@ -414,7 +417,8 @@ pub(crate) fn make_dialog<'a>(
             current_value,
         } => {
             let metadata = app_state
-                .config_metadata
+                .config_metadata_state
+                .effective()
                 .entries
                 .get(*metadata_id)
                 .expect("Failed to look up metadata");

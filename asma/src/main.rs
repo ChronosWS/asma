@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use components::{make_button, server_card};
-use config_utils::{create_metadata_index, rebuild_index_with_metadata};
+use config_utils::{create_metadata_index, rebuild_index_with_metadata, ConfigMetadataState};
 use dialogs::global_settings::{self, GlobalSettingsMessage};
 use dialogs::metadata_editor::{self, MetadataEditContext, MetadataEditorMessage};
 use dialogs::server_settings::{self, ServerSettingsContext, ServerSettingsMessage};
@@ -14,7 +14,7 @@ use iced::{
     Subscription, Theme,
 };
 
-use models::config::{ConfigEntries, ConfigMetadata};
+use models::config::ConfigEntries;
 use server_utils::{UpdateServerProgress, ValidationResult};
 use steamcmd_utils::validate_steamcmd;
 use sysinfo::{System, SystemExt};
@@ -64,7 +64,7 @@ struct AppState {
     system: Arc<Mutex<System>>,
     global_settings: GlobalSettings,
     global_state: GlobalState,
-    config_metadata: ConfigMetadata,
+    config_metadata_state: ConfigMetadataState,
     config_index: Index,
     servers: Vec<Server>,
     mode: MainWindowMode,
@@ -181,7 +181,12 @@ impl Application for AppState {
         let arial_bytes = get_system_font_bytes("ARIAL.ttf").expect("Failed to find Arial");
         let global_settings = settings_utils::load_global_settings()
             .unwrap_or_else(|_| settings_utils::default_global_settings());
-        let config_metadata = config_utils::load_config_metadata().unwrap_or_default();
+        let built_in_config_metadata = config_utils::load_built_in_config_metadata().unwrap();
+        let local_config_metadata = config_utils::load_config_metadata().unwrap_or_default();
+        let config_metadata_state = ConfigMetadataState::from_built_in_and_local(
+            built_in_config_metadata,
+            local_config_metadata,
+        );
         let servers = settings_utils::load_server_settings(&global_settings)
             .expect("Failed to load server settings")
             .drain(..)
@@ -234,8 +239,11 @@ impl Application for AppState {
         };
 
         let mut config_index = create_metadata_index();
-        rebuild_index_with_metadata(&mut config_index, &config_metadata.entries)
-            .expect("Failed to build config metadata index");
+        rebuild_index_with_metadata(
+            &mut config_index,
+            &config_metadata_state.effective().entries,
+        )
+        .expect("Failed to build config metadata index");
 
         (
             AppState {
@@ -248,7 +256,7 @@ impl Application for AppState {
                     edit_metadata_id: None,
                     steamcmd_state,
                 },
-                config_metadata,
+                config_metadata_state,
                 config_index,
                 servers,
                 mode: MainWindowMode::Servers,
@@ -317,7 +325,10 @@ impl Application for AppState {
                 let server_settings = self
                     .get_server_settings(id)
                     .expect("Failed to look up server settings");
-                match server_utils::generate_command_line(&self.config_metadata, server_settings) {
+                match server_utils::generate_command_line(
+                    &self.config_metadata_state,
+                    server_settings,
+                ) {
                     Ok(args) => Command::perform(
                         start_server(
                             id,
@@ -592,9 +603,21 @@ impl Application for AppState {
             )
         };
 
-        let main_content = container(column![main_header, horizontal_rule(3), bottom_pane])
-            .width(Length::Fill)
-            .height(Length::Fill);
+        let main_content = container(column![
+            container(text("DEVELOPMENT BUILD - USE AT YOUR OWN RISK").size(15))
+                .style(move |_: &_| container::Appearance {
+                    text_color: Some(Color::WHITE),
+                    background: Some(iced::Background::Color(Color::from_rgb(1.0, 0.0, 0.0))),
+                    ..Default::default()
+                })
+                .width(Length::Fill)
+                .align_x(Horizontal::Center),
+            main_header,
+            horizontal_rule(3),
+            bottom_pane
+        ])
+        .width(Length::Fill)
+        .height(Length::Fill);
 
         let result: Element<Message> = match &self.mode {
             MainWindowMode::Servers => main_content.into(),
