@@ -484,17 +484,20 @@ pub(crate) fn make_dialog<'a>(
                         } else {
                             String::new()
                         };
-                        container(column![row![
-                            text(name.to_owned()).size(16),
-                            text("="),
-                            text(value),
-                            horizontal_space(Length::Fill),
-                            text(location.to_string()).size(12),
-                            buttons_content
-                        ]
-                        .spacing(5)
-                        .padding(5)
-                        .align_items(Alignment::Center),])
+
+                        let mut row_contents: Vec<Element<_>> = Vec::new();
+                        row_contents.push(text(name.to_owned()).size(16).into());
+                        if !value.is_empty() {
+                            row_contents.push(text("=").into());
+                            row_contents.push(text(value).into());
+                        }
+                        row_contents.push(horizontal_space(Length::Fill).into());
+                        row_contents.push(text(location.to_string()).size(12).into());
+                        row_contents.push(buttons_content.into());
+                        container(column![row(row_contents)
+                            .spacing(5)
+                            .padding(5)
+                            .align_items(Alignment::Center),])
                         .style(server_setting_style)
                         .into()
                     })
@@ -510,7 +513,6 @@ pub(crate) fn make_dialog<'a>(
                         .on_input(|v| ServerSettingsMessage::QueryChanged(v).into())
                 ]
                 .spacing(5)
-                .padding(5)
                 .align_items(Alignment::Center),
                 horizontal_rule(3),
                 search_content.spacing(1)
@@ -535,11 +537,14 @@ pub(crate) fn make_dialog<'a>(
                 .expect("Failed to look up setting");
             column![
                 row![
-                    text("Name:"),
-                    text(metadata.name.to_owned()),
-                    text("Type:"),
-                    text(metadata.value_type.to_string()),
+                    text("Setting:").size(16),
+                    text(metadata.name.to_owned()).size(16),
                     horizontal_space(Length::Fill),
+                    column![
+                        text(metadata.location.to_string()).size(12),
+                        text(metadata.value_type.to_string()).size(12),
+                    ]
+                    .align_items(Alignment::End),
                     make_button(
                         "Delete",
                         Some(
@@ -577,8 +582,8 @@ pub(crate) fn make_dialog<'a>(
                     )
                 ]
                 .spacing(5)
-                .padding(5)
                 .align_items(Alignment::Center),
+                row![text(&metadata.description).size(12)],
                 row![
                     text("Value:"),
                     text_input("Value...", current_value).on_input(|value| {
@@ -590,9 +595,9 @@ pub(crate) fn make_dialog<'a>(
                     })
                 ]
                 .spacing(5)
-                .padding(5)
                 .align_items(Alignment::Center)
             ]
+            .spacing(5)
         }
     };
 
