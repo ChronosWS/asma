@@ -60,6 +60,7 @@ impl ConfigMetadataState {
         entry.is_built_in = false;
         // TODO: Check for duplicate name/locations, which are not allowed
         self.user.entries.push(entry);
+        self.rebuild_effective();
         self.user.entries.len() - 1
     }
 
@@ -69,6 +70,7 @@ impl ConfigMetadataState {
         entry.is_built_in = false;
         // TODO: Check for duplicate name/locations, which are not allowed
         self.user.entries[metadata_id] = entry;
+        self.rebuild_effective()
     }
 
     /// Removes a user-defined override

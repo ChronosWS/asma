@@ -517,6 +517,7 @@ pub(crate) fn make_dialog<'a>(
                 horizontal_rule(3),
                 search_content.spacing(1)
             ]
+            .spacing(5)
         }
         ServerSettingsEditContext::Editing {
             from_query,
