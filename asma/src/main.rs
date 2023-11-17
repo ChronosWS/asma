@@ -603,21 +603,31 @@ impl Application for AppState {
             )
         };
 
-        let main_content = container(column![
-            container(text("DEVELOPMENT BUILD - USE AT YOUR OWN RISK").size(15))
-                .style(move |_: &_| container::Appearance {
-                    text_color: Some(Color::WHITE),
-                    background: Some(iced::Background::Color(Color::from_rgb(1.0, 0.0, 0.0))),
-                    ..Default::default()
-                })
-                .width(Length::Fill)
-                .align_x(Horizontal::Center),
-            main_header,
-            horizontal_rule(3),
-            bottom_pane
-        ])
-        .width(Length::Fill)
-        .height(Length::Fill);
+        let mut main_content_children: Vec<Element<_>> = Vec::new();
+        if option_env!("IS_RELEASE_BUILD").is_none() {
+            main_content_children
+                .push(
+                    container(text("DEVELOPMENT BUILD - USE AT YOUR OWN RISK").size(15))
+                        .style(move |_: &_| container::Appearance {
+                            text_color: Some(Color::WHITE),
+                            background: Some(iced::Background::Color(Color::from_rgb(
+                                1.0, 0.0, 0.0,
+                            ))),
+                            ..Default::default()
+                        })
+                        .width(Length::Fill)
+                        .align_x(Horizontal::Center)
+                        .into(),
+                )
+                .into()
+        }
+
+        main_content_children.push(main_header.into());
+        main_content_children.push(horizontal_rule(3).into());
+        main_content_children.push(bottom_pane.into());
+        let main_content = container(column(main_content_children))
+            .width(Length::Fill)
+            .height(Length::Fill);
 
         let result: Element<Message> = match &self.mode {
             MainWindowMode::Servers => main_content.into(),

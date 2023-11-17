@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 // TODO: Potentially use Tantivy https://docs.rs/tantivy/0.21.1/tantivy/
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub enum IniFile {
     Game,
     GameUserSettings,
@@ -33,7 +33,7 @@ impl<T: AsRef<str>> From<T> for IniFile {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum IniSection {
     // GameUserSettings.ini
     ServerSettings,
@@ -84,7 +84,7 @@ impl<T: AsRef<str>> From<T> for IniSection {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConfigLocation {
     MapName,
     MapUrlOption,
@@ -323,6 +323,12 @@ pub struct MetadataEntry {
     pub default_value: Option<ConfigVariant>,
 }
 
+impl MetadataEntry {
+    pub fn get_name_location(&self) -> (&String, &ConfigLocation) {
+        (&self.name, &self.location)
+    }
+}
+
 impl Default for MetadataEntry {
     fn default() -> Self {
         Self {
@@ -378,6 +384,12 @@ pub struct ConfigEntry {
     pub meta_name: String,
     pub meta_location: ConfigLocation,
     pub value: ConfigVariant,
+}
+
+impl ConfigEntry {
+    pub fn get_name_location(&self) -> (&String, &ConfigLocation) {
+        (&self.meta_name, &self.meta_location)
+    }
 }
 
 impl From<&MetadataEntry> for ConfigEntry {

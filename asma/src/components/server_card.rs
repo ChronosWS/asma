@@ -16,6 +16,7 @@ fn server_card_style(_theme: &Theme) -> Appearance {
         ..Default::default()
     }
 }
+
 pub fn server_card(server: &Server) -> Element<'_, Message> {
     let run_state_content = match &server.state.run_state {
         RunState::NotInstalled => container(horizontal_space(Length::Shrink)),

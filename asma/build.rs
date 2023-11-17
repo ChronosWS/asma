@@ -14,7 +14,6 @@ struct DefaultConfigManifest {
 }
 
 fn main() -> Result<()> {
-    let is_dev_build = std::env::var("IS_DEV_BUILD").is_ok();
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let out_dir = Path::new(&out_dir)
