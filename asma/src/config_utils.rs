@@ -383,10 +383,6 @@ pub struct QueryResult {
 }
 
 pub fn query_metadata_index(index: &Index, query: &str) -> Result<Vec<QueryResult>> {
-    if query.len() < 3 {
-        return Ok(Vec::new());
-    }
-
     let schema = index.schema();
     let name = schema.get_field("name")?;
     let description = schema.get_field("description")?;

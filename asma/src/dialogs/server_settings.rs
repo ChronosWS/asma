@@ -11,9 +11,9 @@ use tracing::{error, info, trace};
 
 use crate::{
     components::make_button,
-    config_utils::query_metadata_index,
+    config_utils::{query_metadata_index, QueryResult},
     icons,
-    models::config::{ConfigEntry, ConfigVariant},
+    models::config::{ConfigEntry, ConfigVariant, ConfigMetadata, ConfigEntries},
     server_utils::update_inis_from_settings,
     settings_utils::save_server_settings_with_error,
     AppState, MainWindowMode, Message,
@@ -86,9 +86,10 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
             ServerSettingsMessage::CloseServerSettings => {
                 if let Some(server) = app_state.servers.get(server_id) {
                     save_server_settings_with_error(&app_state.global_settings, &server.settings);
-                    if let Err(e) =
-                        update_inis_from_settings(&app_state.config_metadata_state.effective(), &server.settings)
-                    {
+                    if let Err(e) = update_inis_from_settings(
+                        &app_state.config_metadata_state.effective(),
+                        &server.settings,
+                    ) {
                         error!("Failed to save ini files: {}", e.to_string());
                     }
                 }
@@ -304,80 +305,120 @@ pub(crate) fn make_dialog<'a>(
             false
         };
 
+    fn get_union_of_effective_and_server(effective: &ConfigMetadata, server: &ConfigEntries) -> Vec<QueryResult> {
+        let mut result = Vec::new();
+        result.extend(effective.entries.iter().map(|e| QueryResult {
+            score: 1.0,
+            name: e.name.to_owned(),
+            location: e.location.to_owned(),
+        }));
+
+        for entry in server.entries.iter() {
+            if result.iter().find(|e| e.name == entry.meta_name && e.location == entry.meta_location).is_none() {
+                result.push(QueryResult { score: 1.0, name: entry.meta_name.to_owned(), location: entry.meta_location.to_owned() });
+            }
+        }
+        result
+    }
+
     let editor_content = match &settings_context.edit_context {
         ServerSettingsEditContext::NotEditing { query } => {
-            let search_content = match query_metadata_index(&app_state.config_index, &query) {
-                Ok(results) => {
-                    if !results.is_empty() {
-                        trace!("Results: {}", results.len());
+            let search_content = {
+                // 1. Get the search results, if any.  If there are none, construct results based 
+                //    on the union of unique names and locations from server and effective entries.
+                // 2. Iterate over the search results and find the matching server and effective entries
+                // 3. Display the card based on those entries.
+
+                // TODO: The way this is done is really stupid and inefficient.  Need to rearchitect how 
+                // we capture and use this data for searching so we aren't re-processing the entire list
+                // of everyting every time a selection changes.
+                // 1. The search results or default mapping
+                let search_results = match query_metadata_index(&app_state.config_index, &query) {
+                    Ok(results) => Some(results),
+                    Err(e) => {
+                        error!("Failed to get query results: {}", e.to_string());
+                        None
                     }
-                    // For each metadata result, we need to see if we also got a corresponsing config entry for the server
+                }.or_else(|| Some(get_union_of_effective_and_server(&app_state.config_metadata_state.effective(), &server_settings.config_entries))).unwrap_or_default();
 
-                    let results = results
-                        .iter()
-                        .map(|r| (r, server_settings.config_entries.find(&r.name, &r.location)));
+                // 2. The mapped default and server entries
+                let entries = search_results.iter().map(|r| 
+                (
+                    app_state.config_metadata_state.effective().find_entry(&r.name, &r.location),
+                    server_settings.config_entries.find(&r.name, &r.location)
+                ));
 
-                    let search_rows = results
-                        .map(|(r, entry)| {
+                let search_rows = 
+                    entries
+                        .map(|(metadata_entry, server_entry)| {
+                            let can_override = metadata_entry.is_some() && server_entry.is_none();
+                            let can_edit = server_entry.is_some();
+                            let can_remove = server_entry.is_some();
+
+                            let (name, location) = if let Some((_, meta)) = metadata_entry {
+                                (&meta.name, &meta.location)
+                            } else if let Some((_, server)) = server_entry {
+                                (&server.meta_name, &server.meta_location)
+                            } else {
+                                panic!("Somehow we got a entry with no associated meta or server entry");
+                            };
+
                             trace!(
-                                "Name: {} Location: {} Entry: {:?}",
-                                r.name,
-                                r.location,
-                                if let Some((index, _)) = entry {
-                                    Some(index)
-                                } else {
-                                    None
-                                }
+                                "Name: {} Location: {}",
+                                name,
+                                location,
                             );
-                            let (metadata_id, _) = app_state
-                                .config_metadata_state
-                                .effective()
-                                .find_entry(&r.name, &r.location)
-                                .expect("Failed to look up metadata");
-                            let buttons_content = if let Some((index, _)) = entry {
-                                row![
+                            let mut buttons_content = Vec::new();
+                            if let Some((metadata_id, _)) = metadata_entry {
+                                if server_entry.is_none() {
+                                    buttons_content.push(make_button(
+                                        "Override",
+                                        Some(
+                                            ServerSettingsMessage::OverrideSetting {
+                                                from_query: query.to_owned(),
+                                                metadata_id
+                                            }
+                                            .into()
+                                        ),
+                                        icons::ADD.clone()
+                                    ).into());
+                                }
+                            }
+                            if let (Some((metadata_id, _)), Some((setting_id, _))) = (metadata_entry, server_entry) {
+                                buttons_content.push(make_button(
+                                    "Edit",
+                                    Some(
+                                        ServerSettingsMessage::EditSetting {
+                                            from_query: query.to_owned(),
+                                            metadata_id,
+                                            setting_id
+                                        }
+                                        .into()
+                                    ),
+                                    icons::EDIT.clone()
+                                ).into());
+                            }
+                            if let Some((setting_id, _)) = server_entry {
+                                buttons_content.push(
                                     make_button(
                                         "Remove",
                                         Some(
                                             ServerSettingsMessage::RemoveSetting {
                                                 from_query: query.to_owned(),
-                                                setting_id: index
+                                                setting_id
                                             }
                                             .into()
                                         ),
                                         icons::DELETE.clone()
-                                    ),
-                                    make_button(
-                                        "Edit",
-                                        Some(
-                                            ServerSettingsMessage::EditSetting {
-                                                from_query: query.to_owned(),
-                                                metadata_id,
-                                                setting_id: index
-                                            }
-                                            .into()
-                                        ),
-                                        icons::EDIT.clone()
-                                    )
-                                ]
-                            } else {
-                                row![make_button(
-                                    "Override",
-                                    Some(
-                                        ServerSettingsMessage::OverrideSetting {
-                                            from_query: query.to_owned(),
-                                            metadata_id
-                                        }
-                                        .into()
-                                    ),
-                                    icons::ADD.clone()
-                                )]
-                            };
+                                    )  .into()
+                                )
+                            }
+                            let buttons_content = row(buttons_content);
                             row![
                                 text("Name:"),
-                                text(r.name.to_owned()),
+                                text(name.to_owned()),
                                 text("Location"),
-                                text(r.location.to_string()),
+                                text(location.to_string()),
                                 horizontal_space(Length::Fill),
                                 buttons_content
                             ]
@@ -387,14 +428,8 @@ pub(crate) fn make_dialog<'a>(
                             .into()
                         })
                         .collect::<Vec<Element<_>>>();
-                    column(search_rows)
-                }
-                Err(e) => {
-                    error!("Search failed: {}", e.to_string());
-                    column![row![text("No search results").size(24)]]
-                        .width(Length::Fill)
-                        .align_items(Alignment::Center)
-                }
+
+                column(search_rows)
             };
 
             column![
