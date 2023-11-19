@@ -9,12 +9,11 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
     process::Stdio,
-    sync::Arc,
 };
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{ChildStdout, Command},
-    sync::{mpsc::Sender, Mutex},
+    sync::mpsc::{Sender, Receiver, error::TryRecvError},
 };
 
 use std::time::Duration;
@@ -47,68 +46,104 @@ pub enum UpdateServerProgress {
     Verifying(f32),
 }
 
-pub async fn stop_server(server_id: Uuid, pid: u32, system: Arc<Mutex<System>>) -> Result<()> {
-    trace!("Stopping {}", server_id);
-    let system_lock = system.lock().await;
-    if let Some(process) = system_lock.process(Pid::from_u32(pid)) {
-        trace!("Sending KILL to {}", pid);
-        process.kill_with(sysinfo::Signal::Kill);
-    }
-    Ok(())
+pub enum ServerMonitorCommand {
+    AddServer { server_id: Uuid, installation_dir: String },
+    KillServer { server_id: Uuid }
+}
+
+struct ServerProcessRecord {
+    server_id: Uuid,
+    exe_path: PathBuf,
+    pid: Pid
 }
 
 /// Watches the process stack for changes to this server's process state
 pub async fn monitor_server(
-    server_id: Uuid,
-    installation_dir: impl AsRef<str>,
-    system: Arc<Mutex<System>>,
+    mut command: Receiver<ServerMonitorCommand>,
     progress: Sender<AsyncNotification>,
 ) -> Result<()> {
-    trace!("Monitoring {}", server_id);
-
-    let exe = Path::new(installation_dir.as_ref())
-        .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe")
-        .canonicalize()?;
-
-    let mut current_pid = None;
+    let mut system = System::default();
+    let mut server_processes = HashMap::new();
+    let mut dead_servers = Vec::new();
+    
     loop {
-        {
-            let mut system_lock = system.lock().await;
-            if let Some(pid) = current_pid {
-                let process_exists = system_lock.refresh_process(pid);
-                if !process_exists {
-                    break;
-                }
-            } else {
-                system_lock.refresh_processes();
-            }
-
-            // If we already have the PID, try to refresh that process.
-            let process = current_pid
-                .and_then(|pid| system_lock.process(pid))
-                .or_else(|| {
-                    system_lock.processes().values().find(|process| {
+        // Check for new commands
+        let command = command.try_recv();
+        match command {
+            Ok(ServerMonitorCommand::AddServer { server_id, installation_dir }) => {
+                let path = Path::new(&installation_dir)
+                .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe");
+                if let Ok(exe_path) = path.canonicalize() {
+                    trace!("Initializing server monitoring for {} ({})", server_id, exe_path.display());
+                    // Refresh all processes so we can find the PID in the set of command-lines
+                    system.refresh_processes();
+                    let process = system.processes().values().find(|process| 
                         process
                             .exe()
                             .canonicalize()
-                            .map(|process_exe| process_exe == exe)
-                            .unwrap_or(false)
-                    })
-                });
+                            .map(|process_exe| process_exe == exe_path)
+                            .unwrap_or(false));
+                    if let Some(process) = process {
+                        let pid = process.pid();
+                        server_processes.insert(server_id, ServerProcessRecord {
+                            server_id,
+                            exe_path,
+                            pid
+                        });
+                    } else {
+                        warn!("Failed to find server process for {} ({}).  This might be OK on startup if the server isn't running", server_id, exe_path.display());
+                    }
+                } else {
+                    error!("Failed to canonicalize path {}", path.display())
+                }
+            },
+            Ok(ServerMonitorCommand::KillServer { server_id }) => {
+                if let Some(record) = server_processes.remove(&server_id) {
+                    if let Some(process) = system.process(record.pid) {
+                        trace!("Sending KILL to {}", record.pid);
+                        process.kill_with(sysinfo::Signal::Kill);
+                    }
 
-            if let Some(process) = process {
-                let pid = process.pid();
+                    let _ = progress
+                            .send(AsyncNotification::UpdateServerRunState(
+                                record.server_id,
+                                RunState::Stopped,
+                            ))
+                            .await;
+                }
+            }
+            Err(TryRecvError::Disconnected) => {
+                trace!("Closing monitor_server channel");
+                return Ok(());
+            }
+            Err(TryRecvError::Empty) => {
+                // Do nothing
+            }
+        }
+
+        // Refresh the process state for each tracked process
+        for record in server_processes.values() {
+            let process_exists = system.refresh_process(record.pid);
+            if !process_exists {
+                // The process has terminated
+                let _ = progress
+                            .send(AsyncNotification::UpdateServerRunState(
+                                record.server_id,
+                                RunState::Stopped,
+                            ))
+                            .await;
+                dead_servers.push(record.server_id);
+            } else if let Some(process) = system.process(record.pid) {
                 match process.status() {
                     ProcessStatus::Run => {
-                        current_pid = Some(pid);
                         let run_data = RunData {
-                            pid: pid.as_u32(),
+                            pid: record.pid.as_u32(),
                             cpu_usage: process.cpu_usage(),
                             memory_usage: process.memory(),
                         };
                         let _ = progress
                             .send(AsyncNotification::UpdateServerRunState(
-                                server_id,
+                                record.server_id,
                                 RunState::Available(run_data),
                             ))
                             .await;
@@ -121,23 +156,22 @@ pub async fn monitor_server(
                         // );
                     }
                     other => {
-                        trace!("{}: Other Status: {:?}.  Bailing...", server_id, other);
+                        trace!("{}: Other Status: {:?}.  Bailing...", record.server_id, other);
                         break;
                     }
                 }
             } else {
-                break;
+                // Somehow didn't find the process
+                error!("Failed to fine process {} ({})", record.server_id, record.exe_path.display());
+                dead_servers.push(record.server_id);
             }
         }
 
-        if let None = current_pid {
-            trace!("{}: Process exited or not found", server_id);
-            break;
-        }
+        // Remove records of dead servers
+        dead_servers.drain(..).for_each(|server_id| { server_processes.remove(&server_id); });
 
         sleep(Duration::from_secs(5)).await;
     }
-    Ok(())
 }
 
 pub fn generate_command_line(

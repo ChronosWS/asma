@@ -27,6 +27,7 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
         )),
         RunState::Starting => container(row![
             text("Starting..."),
+            horizontal_space(Length::Fill),
             make_button(
                 "Kill",
                 Some(Message::StopServer(server.id())),
@@ -44,7 +45,7 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                     )),
                     horizontal_space(Length::Fill),
                     make_button(
-                        "Stop",
+                        "Kill",
                         Some(Message::StopServer(server.id())),
                         icons::STOP.clone()
                     )

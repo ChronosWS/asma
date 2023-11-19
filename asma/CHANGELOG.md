@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.2] - Fix Issue #8 - Shared process enumeration
+* Process enumeration now shared among all running servers, improving performance
+
 [0.1.1] - Many changes
 * Built-in default config metadata
 * Fix command-line options handling to remove extraneous `?`

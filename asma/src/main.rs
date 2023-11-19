@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use components::{make_button, server_card};
 use config_utils::{create_metadata_index, rebuild_index_with_metadata, ConfigMetadataState};
 use dialogs::global_settings::{self, GlobalSettingsMessage};
@@ -15,12 +13,12 @@ use iced::{
 };
 
 use models::config::ConfigEntries;
-use server_utils::{UpdateServerProgress, ValidationResult};
+use server_utils::{UpdateServerProgress, ValidationResult, ServerMonitorCommand};
 use steamcmd_utils::validate_steamcmd;
 use sysinfo::{System, SystemExt};
 use tantivy::Index;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{channel, Sender};
-use tokio::sync::Mutex;
 use tracing::{error, trace, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
@@ -42,7 +40,7 @@ use models::*;
 use uuid::Uuid;
 
 use crate::server_utils::{
-    monitor_server, start_server, stop_server, update_server, validate_server, UpdateMode,
+    monitor_server, start_server, update_server, validate_server, UpdateMode,
 };
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
@@ -60,8 +58,8 @@ enum MainWindowMode {
 }
 
 struct AppState {
-    async_sender: Option<Sender<AsyncNotification>>,
-    system: Arc<Mutex<System>>,
+    monitor_command_channel: Option<Sender<ServerMonitorCommand>>,
+    server_sender_channel: Option<Sender<AsyncNotification>>,
     global_settings: GlobalSettings,
     global_state: GlobalState,
     config_metadata_state: ConfigMetadataState,
@@ -168,6 +166,10 @@ fn async_pump() -> Subscription<AsyncNotification> {
     )
 }
 
+async fn send_monitor_command(command_channel: Sender<ServerMonitorCommand>, command: ServerMonitorCommand) -> Result<(), SendError<ServerMonitorCommand>> {
+    command_channel.send(command).await
+}
+
 impl Application for AppState {
     type Executor = executor::Default;
     type Message = Message;
@@ -187,6 +189,7 @@ impl Application for AppState {
             built_in_config_metadata,
             local_config_metadata,
         );
+
         let servers = settings_utils::load_server_settings(&global_settings)
             .expect("Failed to load server settings")
             .drain(..)
@@ -247,8 +250,8 @@ impl Application for AppState {
 
         (
             AppState {
-                async_sender: None,
-                system: Arc::new(Mutex::new(System::default())),
+                monitor_command_channel: None,
+                server_sender_channel: None,
                 global_settings,
                 global_state: GlobalState {
                     app_version: env!("CARGO_PKG_VERSION").into(),
@@ -306,16 +309,18 @@ impl Application for AppState {
             Message::GlobalSettings(message) => global_settings::update(self, message),
             Message::ServerSettings(message) => server_settings::update(self, message),
             Message::MetadataEditor(message) => metadata_editor::update(self, message),
-            Message::StopServer(id) => {
-                trace!("Stop Server {} (Not Implemented)", id);
+            Message::StopServer(server_id) => {
+                trace!("Stop Server {} (Not Implemented)", server_id);
                 let server_state = self
-                    .get_server_state_mut(id)
+                    .get_server_state_mut(server_id)
                     .expect("Failed to look up server state");
-                if let RunState::Available(RunData { pid, .. }) = server_state.run_state {
+                if let RunState::Available(RunData { .. }) = server_state.run_state {
                     server_state.run_state = RunState::Stopping;
-                    Command::perform(stop_server(id, pid, self.system.clone()), move |_| {
-                        Message::None
-                    })
+                    if let Some(command_channel) = self.monitor_command_channel.to_owned() {
+                        Command::perform(send_monitor_command(command_channel, ServerMonitorCommand::KillServer { server_id }), |_| Message::None)
+                    } else {
+                        Command::none()
+                    }
                 } else {
                     Command::none()
                 }
@@ -350,39 +355,27 @@ impl Application for AppState {
                     }
                 }
             }
-            Message::ServerRunStateChanged(id, run_state) => {
-                trace!("Server Run State Changed {}", id);
+            Message::ServerRunStateChanged(server_id, run_state) => {
+                trace!("Server Run State Changed {}", server_id);
                 let installation_dir = self
-                    .get_server_settings(id)
+                    .get_server_settings(server_id)
                     .expect("Failed to look up server settings")
                     .get_full_installation_location();
 
                 let server_state = self
-                    .get_server_state_mut(id)
+                    .get_server_state_mut(server_id)
                     .expect("Failed to look up server settings");
 
                 // TODO: If we hit the Starting state, we should start the process monitor for this server.
                 // Once we hit the Stopped state, we can stop the process monitor.
                 server_state.run_state = run_state.clone();
                 if let RunState::Starting = run_state {
-                    Command::perform(
-                        monitor_server(
-                            id,
-                            installation_dir,
-                            self.system.clone(),
-                            self.async_sender.as_ref().unwrap().clone(),
-                        ),
-                        move |res| match res {
-                            Ok(_) => Message::ServerRunStateChanged(id, RunState::Stopped),
-                            Err(e) => {
-                                error!(
-                                    "Failed to get server process information: {}",
-                                    e.to_string()
-                                );
-                                Message::ServerRunStateChanged(id, RunState::Stopped)
-                            }
-                        },
-                    )
+                    if let Some(command_channel) = self.monitor_command_channel.to_owned() {
+                    
+                        Command::perform(send_monitor_command(command_channel, ServerMonitorCommand::AddServer { server_id, installation_dir }), |_| Message::None)
+                    } else {
+                        Command::none()
+                    }
                 } else {
                     Command::none()
                 }
@@ -438,7 +431,7 @@ impl Application for AppState {
                         server_settings.get_full_installation_location(),
                         app_id,
                         mode,
-                        self.async_sender.as_ref().unwrap().clone(),
+                        self.server_sender_channel.as_ref().unwrap().clone(),
                     ),
                     move |_| Message::ServerUpdated(id),
                 )
@@ -498,31 +491,31 @@ impl Application for AppState {
             // TODO: Extract these to a different location
             Message::AsyncNotification(AsyncNotification::AsyncStarted(sender)) => {
                 trace!("Async notification pipe established");
-                self.async_sender = Some(sender);
 
-                // Run deferred startup operations
-                let run_state_commands = self.servers.iter().map(|s| {
-                    let id = s.id();
+                // Start the server monitor background task
+                let (monitor_send, monitor_recv) = channel(100);
+                self.server_sender_channel = Some(sender.clone());
+                self.monitor_command_channel = Some(monitor_send);
+
+                let mut run_state_commands = Vec::new();
+
+                run_state_commands.push(Command::perform(monitor_server(
+                    monitor_recv,
+                    sender,
+                ), |_| Message::None));
+
+                // Start checking existing servers
+                run_state_commands.extend(self.servers.iter().map(|s| {
+                    let server_id = s.id();
                     let installation_dir = s.settings.get_full_installation_location();
-                    Command::perform(
-                        monitor_server(
-                            id,
-                            installation_dir,
-                            self.system.clone(),
-                            self.async_sender.as_ref().unwrap().clone(),
-                        ),
-                        move |res| match res {
-                            Ok(_) => Message::ServerRunStateChanged(id, RunState::Stopped),
-                            Err(e) => {
-                                error!(
-                                    "Failed to get server process information: {}",
-                                    e.to_string()
-                                );
-                                Message::ServerRunStateChanged(id, RunState::Stopped)
-                            }
-                        },
-                    )
-                });
+                    if let Some(command_channel) = self.monitor_command_channel.to_owned() {
+                        Command::perform(send_monitor_command(command_channel, ServerMonitorCommand::AddServer { server_id, installation_dir }), |_| Message::None)
+                    } else {
+                        Command::none()
+                    }
+                    
+        
+                }));
                 Command::batch(run_state_commands)
             }
             Message::AsyncNotification(AsyncNotification::UpdateServerProgress(id, progress)) => {
