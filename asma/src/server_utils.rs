@@ -226,7 +226,12 @@ pub fn generate_command_line(
         })
         .map(|s| s.into());
 
-    args.push(format!("{}?{}", map, url_params).into());
+    if url_params.is_empty() {
+        args.push(map.to_owned());
+    } else {
+        args.push(format!("{}?{}", map, url_params).into());
+    }
+    
     args.extend(switch_params);
 
     Ok(args)
