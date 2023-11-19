@@ -98,18 +98,11 @@ pub async fn monitor_server(
                 }
             },
             Ok(ServerMonitorCommand::KillServer { server_id }) => {
-                if let Some(record) = server_processes.remove(&server_id) {
+                if let Some(record) = server_processes.get(&server_id) {
                     if let Some(process) = system.process(record.pid) {
                         trace!("Sending KILL to {}", record.pid);
                         process.kill_with(sysinfo::Signal::Kill);
                     }
-
-                    let _ = progress
-                            .send(AsyncNotification::UpdateServerRunState(
-                                record.server_id,
-                                RunState::Stopped,
-                            ))
-                            .await;
                 }
             }
             Err(TryRecvError::Disconnected) => {

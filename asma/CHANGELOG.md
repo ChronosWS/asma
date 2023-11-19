@@ -1,7 +1,11 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.3] - Logging, Server Kill state fix
+* [Issue 21](https://github.com/ChronosWS/asma/issues/21) We now log to `asma.log` next to the `asma.exe`
+* Server state after kill should now end at Stopped, rather than Stopping.
+
 [0.1.2] - Fix Issue #8 - Shared process enumeration
-* Process enumeration now shared among all running servers, improving performance
+* [Issue 8](https://github.com/ChronosWS/asma/issues/8) Process enumeration now shared among all running servers, improving performance
 
 [0.1.1] - Many changes
 * Built-in default config metadata

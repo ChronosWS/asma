@@ -1,3 +1,5 @@
+use std::fs::File;
+
 use components::{make_button, server_card};
 use config_utils::{create_metadata_index, rebuild_index_with_metadata, ConfigMetadataState};
 use dialogs::global_settings::{self, GlobalSettingsMessage};
@@ -13,14 +15,15 @@ use iced::{
 };
 
 use models::config::ConfigEntries;
-use server_utils::{UpdateServerProgress, ValidationResult, ServerMonitorCommand};
+use server_utils::{ServerMonitorCommand, UpdateServerProgress, ValidationResult};
 use steamcmd_utils::validate_steamcmd;
 use sysinfo::{System, SystemExt};
 use tantivy::Index;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{channel, Sender};
-use tracing::{error, trace, warn, Level};
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use tracing::{error, trace, warn};
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{filter::LevelFilter, prelude::*, Layer};
 
 mod components;
 mod config_utils;
@@ -166,7 +169,10 @@ fn async_pump() -> Subscription<AsyncNotification> {
     )
 }
 
-async fn send_monitor_command(command_channel: Sender<ServerMonitorCommand>, command: ServerMonitorCommand) -> Result<(), SendError<ServerMonitorCommand>> {
+async fn send_monitor_command(
+    command_channel: Sender<ServerMonitorCommand>,
+    command: ServerMonitorCommand,
+) -> Result<(), SendError<ServerMonitorCommand>> {
     command_channel.send(command).await
 }
 
@@ -317,7 +323,13 @@ impl Application for AppState {
                 if let RunState::Available(RunData { .. }) = server_state.run_state {
                     server_state.run_state = RunState::Stopping;
                     if let Some(command_channel) = self.monitor_command_channel.to_owned() {
-                        Command::perform(send_monitor_command(command_channel, ServerMonitorCommand::KillServer { server_id }), |_| Message::None)
+                        Command::perform(
+                            send_monitor_command(
+                                command_channel,
+                                ServerMonitorCommand::KillServer { server_id },
+                            ),
+                            |_| Message::None,
+                        )
                     } else {
                         Command::none()
                     }
@@ -371,8 +383,16 @@ impl Application for AppState {
                 server_state.run_state = run_state.clone();
                 if let RunState::Starting = run_state {
                     if let Some(command_channel) = self.monitor_command_channel.to_owned() {
-                    
-                        Command::perform(send_monitor_command(command_channel, ServerMonitorCommand::AddServer { server_id, installation_dir }), |_| Message::None)
+                        Command::perform(
+                            send_monitor_command(
+                                command_channel,
+                                ServerMonitorCommand::AddServer {
+                                    server_id,
+                                    installation_dir,
+                                },
+                            ),
+                            |_| Message::None,
+                        )
                     } else {
                         Command::none()
                     }
@@ -499,22 +519,29 @@ impl Application for AppState {
 
                 let mut run_state_commands = Vec::new();
 
-                run_state_commands.push(Command::perform(monitor_server(
-                    monitor_recv,
-                    sender,
-                ), |_| Message::None));
+                run_state_commands.push(Command::perform(
+                    monitor_server(monitor_recv, sender),
+                    |_| Message::None,
+                ));
 
                 // Start checking existing servers
                 run_state_commands.extend(self.servers.iter().map(|s| {
                     let server_id = s.id();
                     let installation_dir = s.settings.get_full_installation_location();
                     if let Some(command_channel) = self.monitor_command_channel.to_owned() {
-                        Command::perform(send_monitor_command(command_channel, ServerMonitorCommand::AddServer { server_id, installation_dir }), |_| Message::None)
+                        Command::perform(
+                            send_monitor_command(
+                                command_channel,
+                                ServerMonitorCommand::AddServer {
+                                    server_id,
+                                    installation_dir,
+                                },
+                            ),
+                            |_| Message::None,
+                        )
                     } else {
                         Command::none()
                     }
-                    
-        
                 }));
                 Command::batch(run_state_commands)
             }
@@ -657,18 +684,55 @@ fn main() -> iced::Result {
 }
 
 fn init_tracing() {
+    let mut layers = Vec::new();
+
     let env_filter = EnvFilter::builder()
         .with_default_directive("asma=TRACE".parse().unwrap())
         .from_env()
         .expect("Invalid trace filter specified");
-    let subscriber = FmtSubscriber::builder()
-        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
-        // will be written to stdout.
-        .with_max_level(Level::TRACE)
-        .with_env_filter(env_filter)
-        // completes the builder.
-        .finish();
+    // let stdout_log = FmtSubscriber::builder()
+    //     // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+    //     // will be written to stdout.
+    //     .with_max_level(Level::TRACE)
+    //     .with_env_filter(env_filter)
+    //     // completes the builder.
+    //     .finish();
 
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    let stdout_log = tracing_subscriber::fmt::layer()
+        .with_ansi(true)
+        .with_filter(LevelFilter::TRACE)
+        .with_filter(env_filter)
+        .boxed();
+    layers.push(stdout_log);
+
+    // Roll the previous log
+    let process_directory = process_path::get_executable_path().expect("Failed to get exe path");
+
+    let asma_log_path = process_directory.with_file_name("asma.log");
+    let asma_log_back_path = process_directory.with_file_name("asma.log.bak");
+
+    if std::fs::metadata(&asma_log_path).is_ok() {
+        std::fs::rename(
+            &asma_log_path,
+            asma_log_back_path,
+        )
+        .expect("Failed to rename log file");
+    }
+
+    let app_log_file = File::create(asma_log_path).expect("Failed to create log file");
+    let env_filter = EnvFilter::builder()
+        .with_default_directive("asma=TRACE".parse().unwrap())
+        .from_env()
+        .expect("Invalid trace filter specified");
+    let app_log = tracing_subscriber::fmt::layer()
+        .with_ansi(false)
+        .with_writer(app_log_file)
+        .with_filter(LevelFilter::TRACE)
+        .with_filter(env_filter)
+        .boxed();
+    layers.push(app_log);
+
+    tracing_subscriber::registry().with(layers).init();
+    //tracing::subscriber::set_global_default(stdout_log).expect("setting default subscriber failed");
     trace!("Ark Server Manager: Ascended initilizing...");
 }
