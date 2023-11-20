@@ -1,6 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
-[0.1.4] - 
+[0.1.5] - Add bAllowUnlimitedRespecs and bAllowCustomRecipes
+
+[0.1.4] - Get Server Version, RCON lib
+
 [0.1.3] - Logging, Server Kill state fix
 * [Issue 21](https://github.com/ChronosWS/asma/issues/21) We now log to `asma.log` next to the `asma.exe`
 * Server state after kill should now end at Stopped, rather than Stopping.
