@@ -1,6 +1,6 @@
 [package]
 name = "asma"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Cliff Hudson <cliff.s.hudson@gmail.com>"]
 edition = "2021"
 build = "build.rs"
@@ -41,6 +41,7 @@ iced = { git = "https://github.com/ChronosWS/iced.git", branch = "chronosws-wini
 rfd = "0.12.1"
 # Search functionality
 tantivy = "0.21.1"
+rcon = { path = "../rcon" }
 
 [build-dependencies]
 anyhow = "1.0.75"

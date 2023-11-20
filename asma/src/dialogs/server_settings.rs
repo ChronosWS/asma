@@ -14,7 +14,7 @@ use crate::{
     config_utils::{query_metadata_index, QueryResult},
     icons,
     models::config::{ConfigEntries, ConfigEntry, ConfigMetadata, ConfigVariant},
-    server_utils::update_inis_from_settings,
+    server::update_inis_from_settings,
     settings_utils::save_server_settings_with_error,
     AppState, MainWindowMode, Message,
 };

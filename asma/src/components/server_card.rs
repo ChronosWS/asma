@@ -1,9 +1,8 @@
+use crate::{file_utils, icons, models::*, server::UpdateMode, Message};
 use iced::{
     widget::{column, container, container::Appearance, horizontal_space, row, text},
     Alignment, Background, BorderRadius, Color, Element, Length, Theme,
 };
-
-use crate::{file_utils, icons, models::*, server_utils::UpdateMode, Message};
 
 use super::make_button;
 
@@ -81,10 +80,17 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                     container(text(format!("Steam Verifying: {}%...", progress)))
                 }
                 InstallState::Validating => container(text("Validating install...")),
-                InstallState::Installed(version) => container(
+                InstallState::Installed {
+                    version,
+                    install_time,
+                } => container(
                     if let RunState::Stopped = server.state.run_state {
                         row![
-                            text(format!("Last Updated: {}", version)),
+                            text(format!("Version: {}", version)),
+                            text(format!(
+                                "Last Updated: {}",
+                                install_time.format("%Y-%m-%d %H:%M")
+                            )),
                             horizontal_space(Length::Fill),
                             make_button(
                                 "Update",
@@ -105,9 +111,15 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                         .spacing(5)
                         .padding(5)
                     } else {
-                        row![text(format!("Last Updated: {}", version))]
-                            .spacing(5)
-                            .padding(5)
+                        row![
+                            text(format!("Version: {}", version)),
+                            text(format!(
+                                "Last Updated: {}",
+                                install_time.format("%Y-%m-%d %H:%M")
+                            ))
+                        ]
+                        .spacing(5)
+                        .padding(5)
                     }
                     .align_items(Alignment::Center),
                 ),
@@ -129,7 +141,7 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
         };
 
     let state_content = match (&server.state.install_state, &server.state.run_state) {
-        (InstallState::Installed(_), _) => row![install_state_content, run_state_content],
+        (InstallState::Installed { .. }, _) => row![install_state_content, run_state_content],
         _ => row![install_state_content],
     };
 

@@ -15,7 +15,7 @@ use iced::{
 };
 
 use models::config::ConfigEntries;
-use server_utils::{ServerMonitorCommand, UpdateServerProgress, ValidationResult};
+use server::{ServerMonitorCommand, UpdateServerProgress, ValidationResult};
 use steamcmd_utils::validate_steamcmd;
 use sysinfo::{System, SystemExt};
 use tantivy::Index;
@@ -34,7 +34,7 @@ mod icons;
 mod modal;
 mod models;
 mod network_utils;
-mod server_utils;
+mod server;
 mod settings_utils;
 mod steamcmd_utils;
 
@@ -42,9 +42,7 @@ use modal::Modal;
 use models::*;
 use uuid::Uuid;
 
-use crate::server_utils::{
-    monitor_server, start_server, update_server, validate_server, UpdateMode,
-};
+use crate::server::{monitor_server, start_server, update_server, validate_server, UpdateMode};
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -201,7 +199,10 @@ impl Application for AppState {
             .drain(..)
             .map(|settings| Server {
                 settings,
-                state: ServerState::default(),
+                state: ServerState {
+                    install_state: InstallState::Validating,
+                    run_state: RunState::NotInstalled,
+                },
             })
             .collect::<Vec<_>>();
 
@@ -342,10 +343,7 @@ impl Application for AppState {
                 let server_settings = self
                     .get_server_settings(id)
                     .expect("Failed to look up server settings");
-                match server_utils::generate_command_line(
-                    &self.config_metadata_state,
-                    server_settings,
-                ) {
+                match server::generate_command_line(&self.config_metadata_state, server_settings) {
                     Ok(args) => Command::perform(
                         start_server(
                             id,
@@ -480,12 +478,21 @@ impl Application for AppState {
                     },
                 )
             }
-            Message::ServerValidated(id, ValidationResult::Success(version)) => {
+            Message::ServerValidated(
+                id,
+                ValidationResult::Success {
+                    version,
+                    install_time,
+                },
+            ) => {
                 trace!("Server Validated {}", id);
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
-                server_state.install_state = InstallState::Installed(version);
+                server_state.install_state = InstallState::Installed {
+                    version,
+                    install_time,
+                };
                 server_state.run_state = RunState::Stopped;
                 Command::none()
             }
@@ -712,11 +719,7 @@ fn init_tracing() {
     let asma_log_back_path = process_directory.with_file_name("asma.log.bak");
 
     if std::fs::metadata(&asma_log_path).is_ok() {
-        std::fs::rename(
-            &asma_log_path,
-            asma_log_back_path,
-        )
-        .expect("Failed to rename log file");
+        std::fs::rename(&asma_log_path, asma_log_back_path).expect("Failed to rename log file");
     }
 
     let app_log_file = File::create(asma_log_path).expect("Failed to create log file");

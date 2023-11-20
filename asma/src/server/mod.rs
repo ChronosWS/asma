@@ -2,36 +2,38 @@ use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Local};
 use ini::Ini;
 use regex::Regex;
-use sysinfo::{Pid, PidExt, ProcessExt, ProcessStatus, System, SystemExt};
 
 use std::{
     collections::HashMap,
-    io::ErrorKind,
+    fs::File,
+    io::{ErrorKind, Read},
     path::{Path, PathBuf},
     process::Stdio,
 };
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{ChildStdout, Command},
-    sync::mpsc::{Sender, Receiver, error::TryRecvError},
+    sync::mpsc::Sender,
 };
-
-use std::time::Duration;
-use tokio::time::sleep;
 
 use tracing::{error, trace, warn};
 use uuid::Uuid;
 
 use crate::{
+    config_utils::ConfigMetadataState,
     models::{
         config::{
             ConfigLocation, ConfigMetadata, ConfigQuantity, ConfigValue, ConfigValueBaseType,
             ConfigValueType, ConfigVariant, IniFile,
         },
-        RunData, RunState, ServerSettings,
+        ServerSettings,
     },
-    AsyncNotification, config_utils::ConfigMetadataState,
+    AsyncNotification,
 };
+
+mod monitor;
+
+pub use monitor::{monitor_server, ServerMonitorCommand};
 
 #[derive(Debug, Clone)]
 pub enum UpdateMode {
@@ -44,127 +46,6 @@ pub enum UpdateServerProgress {
     Initializing,
     Downloading(f32),
     Verifying(f32),
-}
-
-pub enum ServerMonitorCommand {
-    AddServer { server_id: Uuid, installation_dir: String },
-    KillServer { server_id: Uuid }
-}
-
-struct ServerProcessRecord {
-    server_id: Uuid,
-    exe_path: PathBuf,
-    pid: Pid
-}
-
-/// Watches the process stack for changes to this server's process state
-pub async fn monitor_server(
-    mut command: Receiver<ServerMonitorCommand>,
-    progress: Sender<AsyncNotification>,
-) -> Result<()> {
-    let mut system = System::default();
-    let mut server_processes = HashMap::new();
-    let mut dead_servers = Vec::new();
-    
-    loop {
-        // Check for new commands
-        let command = command.try_recv();
-        match command {
-            Ok(ServerMonitorCommand::AddServer { server_id, installation_dir }) => {
-                let path = Path::new(&installation_dir)
-                .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe");
-                if let Ok(exe_path) = path.canonicalize() {
-                    trace!("Initializing server monitoring for {} ({})", server_id, exe_path.display());
-                    // Refresh all processes so we can find the PID in the set of command-lines
-                    system.refresh_processes();
-                    let process = system.processes().values().find(|process| 
-                        process
-                            .exe()
-                            .canonicalize()
-                            .map(|process_exe| process_exe == exe_path)
-                            .unwrap_or(false));
-                    if let Some(process) = process {
-                        let pid = process.pid();
-                        server_processes.insert(server_id, ServerProcessRecord {
-                            server_id,
-                            exe_path,
-                            pid
-                        });
-                    } else {
-                        warn!("Failed to find server process for {} ({}).  This might be OK on startup if the server isn't running", server_id, exe_path.display());
-                    }
-                } else {
-                    error!("Failed to canonicalize path {}", path.display())
-                }
-            },
-            Ok(ServerMonitorCommand::KillServer { server_id }) => {
-                if let Some(record) = server_processes.get(&server_id) {
-                    if let Some(process) = system.process(record.pid) {
-                        trace!("Sending KILL to {}", record.pid);
-                        process.kill_with(sysinfo::Signal::Kill);
-                    }
-                }
-            }
-            Err(TryRecvError::Disconnected) => {
-                trace!("Closing monitor_server channel");
-                return Ok(());
-            }
-            Err(TryRecvError::Empty) => {
-                // Do nothing
-            }
-        }
-
-        // Refresh the process state for each tracked process
-        for record in server_processes.values() {
-            let process_exists = system.refresh_process(record.pid);
-            if !process_exists {
-                // The process has terminated
-                let _ = progress
-                            .send(AsyncNotification::UpdateServerRunState(
-                                record.server_id,
-                                RunState::Stopped,
-                            ))
-                            .await;
-                dead_servers.push(record.server_id);
-            } else if let Some(process) = system.process(record.pid) {
-                match process.status() {
-                    ProcessStatus::Run => {
-                        let run_data = RunData {
-                            pid: record.pid.as_u32(),
-                            cpu_usage: process.cpu_usage(),
-                            memory_usage: process.memory(),
-                        };
-                        let _ = progress
-                            .send(AsyncNotification::UpdateServerRunState(
-                                record.server_id,
-                                RunState::Available(run_data),
-                            ))
-                            .await;
-                        // trace!(
-                        //     "{}: PID: {} CPU: {} MEM: {}",
-                        //     server_id,
-                        //     pid.as_u32(),
-                        //     process.cpu_usage(),
-                        //     process.memory()
-                        // );
-                    }
-                    other => {
-                        trace!("{}: Other Status: {:?}.  Bailing...", record.server_id, other);
-                        break;
-                    }
-                }
-            } else {
-                // Somehow didn't find the process
-                error!("Failed to fine process {} ({})", record.server_id, record.exe_path.display());
-                dead_servers.push(record.server_id);
-            }
-        }
-
-        // Remove records of dead servers
-        dead_servers.drain(..).for_each(|server_id| { server_processes.remove(&server_id); });
-
-        sleep(Duration::from_secs(5)).await;
-    }
 }
 
 pub fn generate_command_line(
@@ -258,7 +139,7 @@ pub fn generate_command_line(
     } else {
         args.push(format!("{}?{}", map, url_params).into());
     }
-    
+
     args.extend(switch_params);
 
     Ok(args)
@@ -496,10 +377,81 @@ pub async fn update_server(
         .with_context(|| "steam_cmd failed")
 }
 
+// NOTE: PERFORMANCE: This algorithm works reasonably, but can take several seconds on debug builds.
+fn get_asa_version(exe_path: &PathBuf) -> Result<String> {
+    let file = std::fs::File::open(exe_path)?;
+    let mut reader = std::io::BufReader::new(file);
+
+    // The string "ArkVersion" represented as Unicode, as it exists in the binary
+    // NOTE: The algorithm used here is NOT general-purpose across any kind of target bytes
+    let target_bytes = [
+        0x41, 0x00, 0x72, 0x00, 0x6B, 0x00, 0x56, 0x00, 0x65, 0x00, 0x72, 0x00, 0x73, 0x00, 0x69,
+        0x00, 0x6F, 0x00, 0x6E, 0x00, 0x00, 0x00,
+    ];
+
+    fn read_to_byte(reader: &mut std::io::BufReader<File>, needle: u8) -> bool {
+        loop {
+            let mut actual_byte = [0u8];
+            if reader.read_exact(&mut actual_byte).is_ok() {
+                if actual_byte[0] == needle {
+                    return true;
+                }
+            } else {
+                return false;
+            }
+        }
+    }
+
+    let mut bytes_read = Vec::new();
+    loop {
+        bytes_read.clear();
+        if read_to_byte(&mut reader, target_bytes[0]) {
+            let result = target_bytes[1..]
+                .iter()
+                .enumerate()
+                .find_map(|(index, &needle)| {
+                    let mut actual_byte = [0u8];
+                    if reader.read_exact(&mut actual_byte).is_ok() && actual_byte[0] == needle {
+                        bytes_read.push(actual_byte[0]);
+                        None
+                    } else {
+                        Some(index)
+                    }
+                });
+            match result {
+                Some(_) => {}
+                None => {
+                    break;
+                }
+            }
+        } else {
+            error!("End of file looking for version string");
+            return Ok(String::new());
+        }
+    }
+
+    let mut version = String::new();
+    let mut buf = [0u8; 2];
+    while reader.read_exact(&mut buf).is_ok() {
+        let unicode_val = u16::from_le_bytes(buf);
+        if unicode_val == 0 {
+            break;
+        }
+        if let Some(char) = char::from_u32(unicode_val as u32) {
+            version.push(char);
+        } else {
+            error!("ERROR: Failed to convert character");
+            break;
+        }
+    }
+
+    Ok(version)
+}
+
 #[derive(Debug, Clone)]
 pub enum ValidationResult {
     NotInstalled,
-    Success(String),
+    Success { version: String, install_time: DateTime<Local> },
     Failed(String),
 }
 
@@ -548,7 +500,7 @@ pub async fn validate_server(
 
     // Validate binary path
     let binary_path = base_path.join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe");
-    let metadata = match std::fs::metadata(binary_path) {
+    let metadata = match std::fs::metadata(&binary_path) {
         Ok(metadata) => metadata,
         Err(err) => match err.kind() {
             ErrorKind::NotFound => {
@@ -559,7 +511,10 @@ pub async fn validate_server(
         },
     };
 
-    let created_time: DateTime<Local> =
+    // Find the version in the binary
+    let version = get_asa_version(&binary_path)?;
+
+    let install_time: DateTime<Local> =
         DateTime::from(metadata.created().with_context(|| "No Creation Time")?);
-    Ok(ValidationResult::Success(created_time.to_rfc3339()))
+    Ok(ValidationResult::Success { version, install_time })
 }

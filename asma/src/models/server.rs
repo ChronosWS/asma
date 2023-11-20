@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -72,7 +73,7 @@ pub enum InstallState {
     Downloading(f32),
     Verifying(f32),
     Validating,
-    Installed(String),
+    Installed { version: String, install_time: DateTime<Local> },
     FailedValidation(String),
 }
 
