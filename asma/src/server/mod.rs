@@ -172,9 +172,7 @@ pub fn update_inis_from_settings(
             .with_context(|| "Failed creating directory for INI file")?;
         Ok(dir_path
             .join(file.to_string())
-            .with_extension("ini")
-            .canonicalize()
-            .expect("Failed to canonicalize path"))
+            .with_extension("ini"))
     }
 
     let mut ini_files = HashMap::new();
