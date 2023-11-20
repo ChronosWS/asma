@@ -86,12 +86,6 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
             ServerSettingsMessage::CloseServerSettings => {
                 if let Some(server) = app_state.servers.get(server_id) {
                     save_server_settings_with_error(&app_state.global_settings, &server.settings);
-                    if let Err(e) = update_inis_from_settings(
-                        &app_state.config_metadata_state.effective(),
-                        &server.settings,
-                    ) {
-                        error!("Failed to save ini files: {}", e.to_string());
-                    }
                 }
                 app_state.mode = MainWindowMode::Servers;
                 Command::none()
@@ -423,7 +417,7 @@ pub(crate) fn make_dialog<'a>(
                             );
                         };
 
-                        trace!("Name: {} Location: {}", name, location,);
+                        //trace!("Name: {} Location: {}", name, location,);
                         let mut buttons_content = Vec::new();
                         if let Some((metadata_id, _)) = metadata_entry {
                             if server_entry.is_none() {

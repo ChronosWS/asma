@@ -42,7 +42,7 @@ use modal::Modal;
 use models::*;
 use uuid::Uuid;
 
-use crate::server::{monitor_server, start_server, update_server, validate_server, UpdateMode};
+use crate::server::{monitor_server, start_server, update_server, validate_server, UpdateMode, update_inis_from_settings};
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -343,6 +343,13 @@ impl Application for AppState {
                 let server_settings = self
                     .get_server_settings(id)
                     .expect("Failed to look up server settings");
+                // Write out updated INI files
+                if let Err(e) = update_inis_from_settings(
+                    &self.config_metadata_state.effective(),
+                    &server_settings,
+                ) {
+                    error!("Failed to save ini files: {}", e.to_string());
+                }
                 match server::generate_command_line(&self.config_metadata_state, server_settings) {
                     Ok(args) => Command::perform(
                         start_server(

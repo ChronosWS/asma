@@ -150,6 +150,7 @@ pub fn update_inis_from_settings(
     server_settings: &ServerSettings,
 ) -> Result<()> {
     let installation_dir = server_settings.get_full_installation_location();
+    trace!("Attempting to save INIs to {}", installation_dir);
     let ini_settings = server_settings
         .config_entries
         .entries
@@ -165,21 +166,28 @@ pub fn update_inis_from_settings(
         .map(Option::unwrap)
         .collect::<Vec<_>>();
 
-    fn ini_file_name(installation_dir: &str, file: &IniFile) -> PathBuf {
-        Path::new(installation_dir)
-            .join("ShooterGame/Saved/Config/WindowsServer")
+    fn ensure_ini_path(installation_dir: &str, file: &IniFile) -> Result<PathBuf> {
+        let dir_path = Path::new(installation_dir).join("ShooterGame/Saved/Config/WindowsServer");
+        std::fs::create_dir_all(&dir_path)
+            .with_context(|| "Failed creating directory for INI file")?;
+        Ok(dir_path
             .join(file.to_string())
             .with_extension("ini")
             .canonicalize()
-            .expect("Failed to canonicalize path")
+            .expect("Failed to canonicalize path"))
     }
 
     let mut ini_files = HashMap::new();
     for (file, section, entry) in ini_settings {
-        match ini_files
-            .entry(file)
-            .or_insert_with(|| Ini::load_from_file(ini_file_name(&installation_dir, file)))
-        {
+        let ini_path = ensure_ini_path(&installation_dir, file)?;
+
+        match ini_files.entry(file).or_insert_with(|| {
+            if std::fs::metadata(&ini_path).is_err() {
+                Ok(Ini::new())
+            } else {
+                Ini::load_from_file(&ini_path)
+            }
+        }) {
             Ok(ini) => {
                 trace!(
                     "Setting {}:[{}] {} = {}",
@@ -200,7 +208,7 @@ pub fn update_inis_from_settings(
 
     for (file, ini_result) in ini_files.drain() {
         if let Ok(ini) = ini_result {
-            let file_name = ini_file_name(&installation_dir, file);
+            let file_name = ensure_ini_path(&installation_dir, file)?;
             trace!("Writing INI file {}", file_name.display());
             ini.write_to_file(&file_name)
                 .with_context(|| format!("Failed to write ini file {}", file_name.display()))?;
@@ -451,7 +459,10 @@ fn get_asa_version(exe_path: &PathBuf) -> Result<String> {
 #[derive(Debug, Clone)]
 pub enum ValidationResult {
     NotInstalled,
-    Success { version: String, install_time: DateTime<Local> },
+    Success {
+        version: String,
+        install_time: DateTime<Local>,
+    },
     Failed(String),
 }
 
@@ -516,5 +527,8 @@ pub async fn validate_server(
 
     let install_time: DateTime<Local> =
         DateTime::from(metadata.created().with_context(|| "No Creation Time")?);
-    Ok(ValidationResult::Success { version, install_time })
+    Ok(ValidationResult::Success {
+        version,
+        install_time,
+    })
 }

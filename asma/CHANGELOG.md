@@ -1,5 +1,7 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.6] - Fix Issue #27 - Saving server settings crashes
+
 [0.1.5] - Add bAllowUnlimitedRespecs and bAllowCustomRecipes
 
 [0.1.4] - Get Server Version, RCON lib
