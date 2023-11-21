@@ -4,7 +4,7 @@ use anyhow::Result;
 use static_init::dynamic;
 use tracing::{error, trace};
 
-use crate::models::{GlobalSettings, ServerSettings, ThemeType};
+use crate::models::{GlobalSettings, ServerSettings, ThemeType, get_default_app_id, get_default_patch_notes_url};
 
 #[dynamic]
 static APP_DATA_ROOT: String = {
@@ -40,7 +40,8 @@ pub fn default_global_settings() -> GlobalSettings {
         profiles_directory: default_profile_directory.to_str().unwrap().into(),
         steamcmd_directory: default_steamcmd_directory.to_str().unwrap().into(),
         steam_api_key: String::new(),
-        app_id: "2430930".into(),
+        app_id: get_default_app_id(),
+        patch_notes_url: get_default_patch_notes_url()
     }
 }
 

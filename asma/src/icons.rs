@@ -20,6 +20,9 @@ pub static EDIT: image::Handle =
 pub static FOLDER_OPEN: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/FolderOpen.ico")).into();
 #[dynamic]
+pub static LOGS: image::Handle =
+    image::Handle::from_memory(std::include_bytes!("../res/icons/Logs.ico")).into();
+#[dynamic]
 pub static REFRESH: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/Refresh.ico")).into();
 #[dynamic]

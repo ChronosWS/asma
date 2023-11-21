@@ -1,4 +1,7 @@
 # Ark Server Manager: Ascended Changelog
+
+[0.1.9] - Add direct link to forum for ASA Patch Notes
+
 [0.1.8] - Add bAllowSpeedLeveling and bAllowFlyerSpeedLeveling
 
 [0.1.7] - Fix Issue #27 (again) - Saving server settings crashes

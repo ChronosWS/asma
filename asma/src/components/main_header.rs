@@ -37,7 +37,12 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
         horizontal_space(Length::Fill),
         column![
             text("My Public IP"),
-            text(global_state.local_ip.to_string())
+            text(global_state.local_ip.to_string()),
+            make_button(
+                "ASA Patch Notes",
+                Some(Message::OpenAsaPatchNotes),
+                icons::LOGS.clone()
+            )
         ]
         .spacing(5)
         .padding(5)

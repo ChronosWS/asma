@@ -26,6 +26,8 @@ pub struct GlobalSettings {
     pub debug_ui: bool,
     #[serde(skip)]
     pub app_data_directory: String,
+    #[serde(default = "get_default_patch_notes_url")]
+    pub patch_notes_url: String,
 }
 
 pub struct GlobalState {
@@ -35,6 +37,10 @@ pub struct GlobalState {
     pub steamcmd_state: SteamCmdState,
 }
 
-fn get_default_app_id() -> String {
+pub fn get_default_app_id() -> String {
     "2430930".into()
+}
+
+pub fn get_default_patch_notes_url() -> String {
+    "https://survivetheark.com/index.php?/forums/forum/5-changelog-patch-notes/".into()
 }

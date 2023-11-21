@@ -42,7 +42,10 @@ use modal::Modal;
 use models::*;
 use uuid::Uuid;
 
-use crate::server::{monitor_server, start_server, update_server, validate_server, UpdateMode, update_inis_from_settings};
+use crate::server::{
+    monitor_server, start_server, update_inis_from_settings, update_server, validate_server,
+    UpdateMode,
+};
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -107,6 +110,7 @@ pub enum Message {
     None,
     FontLoaded(Result<String, font::Error>),
     RefreshIp(LocalIp),
+    OpenAsaPatchNotes,
 
     // Dialogs
     GlobalSettings(GlobalSettingsMessage),
@@ -311,6 +315,13 @@ impl Application for AppState {
                     Err(e) => error!("Failed to load font: {:?}", e),
                 }
 
+                Command::none()
+            }
+            Message::OpenAsaPatchNotes => {
+                let _ = std::process::Command::new("explorer")
+                    .arg(&self.global_settings.patch_notes_url)
+                    .spawn()
+                    .map_err(|e| error!("Failed to spawn form link: {}", e.to_string()));
                 Command::none()
             }
             Message::GlobalSettings(message) => global_settings::update(self, message),
