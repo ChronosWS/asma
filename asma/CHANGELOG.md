@@ -1,5 +1,10 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.10] - Fix #30 (Escaping) and #28 (Removing settings)
+* Strings which need escaping are now escaped in the INI files
+* When an override is removed from Settings, it will also be removed from the INI next time the server runs
+* Remove old "Map" and "Port" values from profile
+
 [0.1.9] - Add direct link to forum for ASA Patch Notes
 
 [0.1.8] - Add bAllowSpeedLeveling and bAllowFlyerSpeedLeveling

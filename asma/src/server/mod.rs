@@ -146,12 +146,37 @@ pub fn generate_command_line(
 }
 
 pub fn update_inis_from_settings(
-    _config_metadata: &ConfigMetadata,
+    config_metadata: &ConfigMetadata,
     server_settings: &ServerSettings,
 ) -> Result<()> {
     let installation_dir = server_settings.get_full_installation_location();
     trace!("Attempting to save INIs to {}", installation_dir);
-    let ini_settings = server_settings
+
+    let entries_to_remove = config_metadata
+        .entries
+        .iter()
+        .filter(|m| {
+            if let ConfigLocation::IniOption(_, _) = m.location {
+                server_settings
+                    .config_entries
+                    .find(&m.name, &m.location)
+                    .is_none()
+            } else {
+                false
+            }
+        })
+        .map(|e| {
+            if let ConfigLocation::IniOption(file, section) = &e.location {
+                Some((file, section, e))
+            } else {
+                None
+            }
+        })
+        .filter(Option::is_some)
+        .map(Option::unwrap)
+        .collect::<Vec<_>>();
+
+    let settings_to_add = server_settings
         .config_entries
         .entries
         .iter()
@@ -170,13 +195,13 @@ pub fn update_inis_from_settings(
         let dir_path = Path::new(installation_dir).join("ShooterGame/Saved/Config/WindowsServer");
         std::fs::create_dir_all(&dir_path)
             .with_context(|| "Failed creating directory for INI file")?;
-        Ok(dir_path
-            .join(file.to_string())
-            .with_extension("ini"))
+        Ok(dir_path.join(file.to_string()).with_extension("ini"))
     }
 
     let mut ini_files = HashMap::new();
-    for (file, section, entry) in ini_settings {
+
+    // Remove entries
+    for (file, section, entry) in entries_to_remove {
         let ini_path = ensure_ini_path(&installation_dir, file)?;
 
         match ini_files.entry(file).or_insert_with(|| {
@@ -187,18 +212,39 @@ pub fn update_inis_from_settings(
             }
         }) {
             Ok(ini) => {
+                if let Some(_) = ini.delete_from(Some(section.to_string()), &entry.name) {
+                    trace!(
+                        "Removed {}:[{}] {}",
+                        file.to_string(),
+                        section.to_string(),
+                        entry.name,
+                    );
+                }
+            }
+            Err(e) => bail!("Failed to load ini file: {}", e.to_string()),
+        }
+    }
+
+    for (file, section, entry) in settings_to_add {
+        let ini_path = ensure_ini_path(&installation_dir, file)?;
+
+        match ini_files.entry(file).or_insert_with(|| {
+            if std::fs::metadata(&ini_path).is_err() {
+                Ok(Ini::new())
+            } else {
+                Ini::load_from_file(&ini_path)
+            }
+        }) {
+            Ok(ini) => {
+                let value = unreal_escaped_value(entry.value.to_string());
                 trace!(
                     "Setting {}:[{}] {} = {}",
                     file.to_string(),
                     section.to_string(),
                     entry.meta_name,
-                    entry.value
+                    value
                 );
-                ini.set_to(
-                    Some(section.to_string()),
-                    entry.meta_name.to_owned(),
-                    entry.value.to_string(),
-                );
+                ini.set_to(Some(section.to_string()), entry.meta_name.to_owned(), value);
             }
             Err(e) => bail!("Failed to load ini file: {}", e.to_string()),
         }
@@ -208,12 +254,35 @@ pub fn update_inis_from_settings(
         if let Ok(ini) = ini_result {
             let file_name = ensure_ini_path(&installation_dir, file)?;
             trace!("Writing INI file {}", file_name.display());
-            ini.write_to_file(&file_name)
+            ini.write_to_file_policy(&file_name, ini::EscapePolicy::Nothing)
                 .with_context(|| format!("Failed to write ini file {}", file_name.display()))?;
         }
     }
 
     Ok(())
+}
+
+/// Creates a value according to the escaping rules for Unreal
+///
+/// Note, this should not be used for structures settings
+/// Reference: https://docs.unrealengine.com/5.2/en-US/configuration-files-in-unreal-engine/
+/// Note also, `Ini` from the rust-ini crate supports various escaping modes.  We are chosing
+/// the "Do nothing" mode so we retain full control over each value
+fn unreal_escaped_value(value: String) -> String {
+    // Replace \ with \\, and " with \"
+    let value = value.replace(r#"\"#, r#"\\"#).replace(r#"""#, r#"\""#);
+
+    // For all non-ascii, possibly special punctuation, just enclose the string in quotes to avoid problems
+    if value.contains(|v| {
+        !((v >= 'a' && v <= 'z')
+            || (v >= 'A' && v <= 'Z')
+            || (v >= '0' && v <= '9')
+            || (v == '.' || v == '/'))
+    }) {
+        format!(r#""{}""#, value)
+    } else {
+        value
+    }
 }
 
 /// Starts the server, returns the PID of the running process
@@ -287,6 +356,7 @@ pub async fn update_server(
 
     // let mut line_reader = std::io::BufReader::with_capacity(32, reader);
 
+    trace!("SteamCMD: {} {}", steamcmd_exe.display(), args.join(" "));
     let mut command = Command::new(steamcmd_exe);
 
     command.args(args);

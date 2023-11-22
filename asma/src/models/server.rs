@@ -13,20 +13,8 @@ pub struct ServerSettings {
     pub id: Uuid,
     pub name: String,
     pub installation_location: String,
-    #[serde(default = "get_default_map")]
-    pub map: String,
-    #[serde(default = "get_default_port")]
-    pub port: u16,
     #[serde(default)]
     pub config_entries: ConfigEntries
-}
-
-fn get_default_map() -> String {
-    "TheIsland_WP".into()
-}
-
-fn get_default_port() -> u16 {
-    7777
 }
 
 impl ServerSettings {

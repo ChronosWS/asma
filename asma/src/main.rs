@@ -424,8 +424,6 @@ impl Application for AppState {
                         id: Uuid::new_v4(),
                         name: String::new(),
                         installation_location: String::new(),
-                        map: "TheIsland_WP".into(),
-                        port: 7777,
                         config_entries: ConfigEntries::default(),
                     },
                     state: ServerState::default(),
