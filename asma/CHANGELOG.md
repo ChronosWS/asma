@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.12] - Add GBUsageToForceRestart option 
+* This option will auto-restart server on high memory usage
+
 [0.1.11] - Fix Port being the wrong kind of setting, Duration for MOTD
 * Thanks @Lacoi for the PR
 
