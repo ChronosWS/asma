@@ -406,10 +406,18 @@ pub(crate) fn make_dialog<'a>(
                 let search_rows = entries
                     .iter()
                     .map(|(metadata_entry, server_entry)| {
-                        let (name, location) = if let Some((_, meta)) = metadata_entry {
-                            (&meta.name, &meta.location)
+                        let (name, location, desc) = if let Some((_, meta)) = metadata_entry {
+                            (
+                                meta.name.as_str(),
+                                &meta.location,
+                                meta.description.as_str(),
+                            )
                         } else if let Some((_, server)) = server_entry {
-                            (&server.meta_name, &server.meta_location)
+                            (
+                                server.meta_name.as_str(),
+                                &server.meta_location,
+                                "NO ASSOCIATED METADATA",
+                            )
                         } else {
                             panic!(
                                 "Somehow we got a entry with no associated meta or server entry"
@@ -478,19 +486,34 @@ pub(crate) fn make_dialog<'a>(
                             String::new()
                         };
 
-                        let mut row_contents: Vec<Element<_>> = Vec::new();
-                        row_contents.push(text(name.to_owned()).size(16).into());
+                        let mut entry_main_content: Vec<Element<_>> = Vec::new();
+                        entry_main_content.push(text(name.to_owned()).size(16).into());
                         if !value.is_empty() {
-                            row_contents.push(text("=").into());
-                            row_contents.push(text(value).into());
+                            entry_main_content.push(text("=").into());
+                            entry_main_content.push(text(value).into());
                         }
-                        row_contents.push(horizontal_space(Length::Fill).into());
-                        row_contents.push(text(location.to_string()).size(12).into());
-                        row_contents.push(buttons_content.into());
-                        container(column![row(row_contents)
-                            .spacing(5)
-                            .padding(5)
-                            .align_items(Alignment::Center),])
+                        entry_main_content.push(horizontal_space(Length::Fill).into());
+                        entry_main_content.push(text(location.to_string()).size(12).into());
+                        entry_main_content.push(buttons_content.into());
+
+                        const MAX_DESC_LENGTH: usize = 150;
+                        let desc = if let Some(first_cr) = desc.find('\n') {
+                            &desc[..first_cr]
+                        } else {
+                            &desc[..desc.len().min(MAX_DESC_LENGTH)]
+                        };
+                        let mut desc_content: Vec<Element<_>> = Vec::new();
+                        desc_content.push(text(desc).size(12).into());
+                        if desc.len() == MAX_DESC_LENGTH {
+                            desc_content.push(text("...").size(12).into());
+                        }
+                        container(column![
+                            row(entry_main_content)
+                                .spacing(5)
+                                .padding(5)
+                                .align_items(Alignment::Center),
+                            row(desc_content).padding(5).align_items(Alignment::Center),
+                        ])
                         .style(server_setting_style)
                         .into()
                     })
@@ -535,8 +558,16 @@ pub(crate) fn make_dialog<'a>(
                     text(metadata.name.to_owned()).size(16),
                     horizontal_space(Length::Fill),
                     column![
-                        text(metadata.location.to_string()).size(12),
-                        text(metadata.value_type.to_string()).size(12),
+                        row![
+                            text("Set in:").size(12),
+                            text(metadata.location.to_string()).size(12)
+                        ]
+                        .spacing(5),
+                        row![
+                            text("Type:").size(12),
+                            text(metadata.value_type.to_string()).size(12),
+                        ]
+                        .spacing(5)
                     ]
                     .align_items(Alignment::End),
                     make_button(
