@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -20,16 +18,6 @@ pub struct ServerSettings {
     pub use_external_rcon: bool,
     #[serde(default)]
     pub config_entries: ConfigEntries
-}
-
-impl ServerSettings {
-    pub fn get_full_installation_location(&self) -> String {
-        Path::new(&self.installation_location)
-            .join(self.id.to_string())
-            .to_str()
-            .expect("Failed to convert path to string")
-            .to_owned()
-    }
 }
 
 #[derive(Debug, Clone)]

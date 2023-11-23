@@ -151,7 +151,7 @@ pub fn update_inis_from_settings(
     config_metadata: &ConfigMetadata,
     server_settings: &ServerSettings,
 ) -> Result<()> {
-    let installation_dir = server_settings.get_full_installation_location();
+    let installation_dir = server_settings.installation_location.to_owned();
     trace!("Attempting to save INIs to {}", installation_dir);
 
     let entries_to_remove = config_metadata
@@ -333,6 +333,9 @@ pub async fn update_server(
     let steamcmd_dir = steamcmd_dir.as_ref();
     let installation_dir = installation_dir.as_ref();
     let steamcmd_exe = Path::new(steamcmd_dir).join("steamcmd.exe");
+
+    // Create the installation directory
+    std::fs::create_dir_all(installation_dir).with_context(|| "Failed to create installation directory")?;
 
     let mut args = vec![
         "+force_install_dir",

@@ -28,7 +28,6 @@ use tracing_subscriber::{filter::LevelFilter, prelude::*, Layer};
 mod components;
 mod config_utils;
 mod dialogs;
-mod file_utils;
 mod fonts;
 mod icons;
 mod modal;
@@ -229,7 +228,7 @@ impl Application for AppState {
             .iter()
             .map(|s| {
                 let id = s.id();
-                let install_location = s.settings.get_full_installation_location();
+                let install_location = s.settings.installation_location.to_owned();
                 let app_id = global_settings.app_id.to_owned();
                 Command::perform(
                     validate_server(id, install_location, app_id),
@@ -391,7 +390,7 @@ impl Application for AppState {
                         start_server(
                             id,
                             server_settings.name.clone(),
-                            server_settings.get_full_installation_location(),
+                            server_settings.installation_location.to_owned(),
                             args,
                         ),
                         move |res| match res {
@@ -413,7 +412,8 @@ impl Application for AppState {
                 let installation_dir = self
                     .get_server_settings(server_id)
                     .expect("Failed to look up server settings")
-                    .get_full_installation_location();
+                    .installation_location
+                    .to_owned();
 
                 let server_settings = self
                     .get_server_settings(server_id)
@@ -522,7 +522,7 @@ impl Application for AppState {
                     update_server(
                         id,
                         self.global_settings.steamcmd_directory.to_owned(),
-                        server_settings.get_full_installation_location(),
+                        server_settings.installation_location.to_owned(),
                         app_id,
                         mode,
                         self.server_sender_channel.as_ref().unwrap().clone(),
@@ -541,7 +541,7 @@ impl Application for AppState {
                     .expect("Failed to look up server settings");
                 let app_id = self.global_settings.app_id.to_owned();
                 Command::perform(
-                    validate_server(id, server_settings.get_full_installation_location(), app_id),
+                    validate_server(id, server_settings.installation_location.to_owned(), app_id),
                     move |result| {
                         result
                             .map(|r| Message::ServerValidated(id, r))
@@ -611,7 +611,7 @@ impl Application for AppState {
                 run_state_commands.extend(self.servers.iter().map(|s| {
                     let server_id = s.id();
                     let server_settings = &s.settings;
-                    let installation_dir = server_settings.get_full_installation_location();
+                    let installation_dir = server_settings.installation_location.to_owned();
                     let rcon_settings_location = ConfigLocation::IniOption(
                         IniFile::GameUserSettings,
                         IniSection::ServerSettings,

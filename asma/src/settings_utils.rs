@@ -4,7 +4,9 @@ use anyhow::Result;
 use static_init::dynamic;
 use tracing::{error, trace};
 
-use crate::models::{GlobalSettings, ServerSettings, ThemeType, get_default_app_id, get_default_patch_notes_url};
+use crate::models::{
+    get_default_app_id, get_default_patch_notes_url, GlobalSettings, ServerSettings, ThemeType,
+};
 
 #[dynamic]
 static APP_DATA_ROOT: String = {
@@ -41,7 +43,7 @@ pub fn default_global_settings() -> GlobalSettings {
         steamcmd_directory: default_steamcmd_directory.to_str().unwrap().into(),
         steam_api_key: String::new(),
         app_id: get_default_app_id(),
-        patch_notes_url: get_default_patch_notes_url()
+        patch_notes_url: get_default_patch_notes_url(),
     }
 }
 
@@ -110,12 +112,26 @@ pub fn load_server_settings(global_settings: &GlobalSettings) -> Result<Vec<Serv
     for entry in profiles_directory {
         let entry = entry?;
         if let Ok(json) = std::fs::read_to_string(entry.path()) {
-            let server_settings: ServerSettings = serde_json::from_str(&json)?;
+            let mut server_settings: ServerSettings = serde_json::from_str(&json)?;
             trace!(
                 "Read profile {} ({})",
                 server_settings.name,
                 server_settings.id
             );
+            // Fix up installation path.
+            let mut installation_location = PathBuf::from(&server_settings.installation_location);
+            if installation_location.ends_with(&server_settings.id.to_string()) {
+                // Already fixed up
+            } else if installation_location.ends_with(&server_settings.name) {
+                // New style
+            } else {
+                // Fix up
+                installation_location.push(server_settings.id.to_string())
+            }
+            server_settings.installation_location = installation_location
+                .to_str()
+                .expect("Failed to convert path to string")
+                .to_owned();
             result.push(server_settings);
         }
     }

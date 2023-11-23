@@ -112,19 +112,20 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                     rfd::FileDialog::new()
                         .set_title("Select server installation directory")
                         .set_directory(default_path)
+                        .set_file_name(&server.settings.name)
                         .pick_folder()
                 } else {
                     None
                 };
-                if let Some(folder) = folder {
-                    info!("Setting path: {:?}", folder);
-                    // TODO: This is really clunky, too much interior mutability.
-                    app_state
-                        .servers
-                        .get_mut(server_id)
-                        .unwrap()
-                        .settings
-                        .installation_location = folder.to_str().unwrap().into();
+                if let Some(mut folder) = folder {
+                    info!("Setting path from folder: {:?}", folder);
+                    // The full installation location should be the selected path ending in the server
+                    // name.  If the server name isn't at the end of the path, add it
+                    let server = app_state.servers.get_mut(server_id).unwrap();
+                    if !folder.ends_with(&server.settings.name) {
+                        folder.push(&server.settings.name)
+                    }
+                    server.settings.installation_location = folder.to_str().unwrap().into();
                     save_server_settings_with_error(
                         &app_state.global_settings,
                         &app_state.servers.get(server_id).unwrap().settings,
@@ -305,7 +306,7 @@ pub(crate) fn make_dialog<'a>(
         .expect("Failed to find server id")
         .settings;
 
-    let is_editing =
+    let is_not_editing =
         if let ServerSettingsEditContext::NotEditing { .. } = settings_context.edit_context {
             true
         } else {
@@ -640,6 +641,16 @@ pub(crate) fn make_dialog<'a>(
         }
     };
 
+    let is_installed = if let Some(server) = app_state.servers.get(settings_context.server_id) {
+        if let crate::models::InstallState::NotInstalled = server.state.install_state {
+            false
+        } else {
+            true
+        }
+    } else {
+        true
+    };
+
     container(
         column![
             row![
@@ -647,7 +658,7 @@ pub(crate) fn make_dialog<'a>(
                 horizontal_space(Length::Fill),
                 make_button(
                     "",
-                    is_editing.then_some(ServerSettingsMessage::CloseServerSettings.into()),
+                    is_not_editing.then_some(ServerSettingsMessage::CloseServerSettings.into()),
                     icons::SAVE.clone()
                 )
             ],
@@ -672,14 +683,14 @@ pub(crate) fn make_dialog<'a>(
                 horizontal_space(Length::Fill),
                 make_button(
                     "Open...",
-                    is_editing
+                    is_not_editing
                         .then_some(ServerSettingsMessage::OpenServerInstallationDirectory.into()),
                     icons::FOLDER_OPEN.clone()
                 )
                 .width(100),
                 make_button(
                     "Set Location...",
-                    is_editing
+                    (!server_settings.name.is_empty() && is_not_editing && !is_installed)
                         .then_some(ServerSettingsMessage::SetServerInstallationDirectory.into()),
                     icons::FOLDER_OPEN.clone()
                 )
