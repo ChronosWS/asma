@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.16] - Settings for external server management
+* Allow other programs to manage INI files
+* Allow other programs to handle RCON
+
 [0.1.15] - Support clean stops via RCON
 * The 'Stop' button will now save and shutdown cleanly, if you have RCON enabled
 

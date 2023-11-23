@@ -3,7 +3,7 @@ use iced::{
     theme,
     widget::{
         column, container, container::Appearance, horizontal_rule, horizontal_space, row,
-        scrollable, text, text_input, Container,
+        scrollable, text, text_input, toggler, Container,
     },
     Alignment, Background, BorderRadius, Color, Command, Element, Length, Theme,
 };
@@ -70,6 +70,8 @@ pub enum ServerSettingsMessage {
         setting_id: usize,
         value: String,
     },
+    ExternalIniManagementToggled(bool),
+    UseExternalRconToggled(bool),
 }
 
 pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -> Command<Message> {
@@ -129,6 +131,18 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                     )
                 } else {
                     error!("No folder selected");
+                }
+                Command::none()
+            }
+            ServerSettingsMessage::ExternalIniManagementToggled(value) => {
+                if let Some(server) = app_state.servers.get_mut(server_id) {
+                    server.settings.allow_external_ini_management = value;
+                }
+                Command::none()
+            }
+            ServerSettingsMessage::UseExternalRconToggled(value) => {
+                if let Some(server) = app_state.servers.get_mut(server_id) {
+                    server.settings.use_external_rcon = value;
                 }
                 Command::none()
             }
@@ -670,6 +684,26 @@ pub(crate) fn make_dialog<'a>(
                     icons::FOLDER_OPEN.clone()
                 )
                 .width(150),
+            ]
+            .spacing(5)
+            .align_items(Alignment::Center),
+            row![
+                toggler(
+                    String::new(),
+                    server_settings.allow_external_ini_management,
+                    |v| ServerSettingsMessage::ExternalIniManagementToggled(v).into()
+                )
+                .width(Length::Shrink),
+                text("Allow External INI Management"),
+            ]
+            .spacing(5)
+            .align_items(Alignment::Center),
+            row![
+                toggler(String::new(), server_settings.use_external_rcon, |v| {
+                    ServerSettingsMessage::UseExternalRconToggled(v).into()
+                })
+                .width(Length::Shrink),
+                text("Use External RCON"),
             ]
             .spacing(5)
             .align_items(Alignment::Center),

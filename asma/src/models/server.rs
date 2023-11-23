@@ -13,7 +13,11 @@ use super::config::ConfigEntries;
 pub struct ServerSettings {
     pub id: Uuid,
     pub name: String,
-    pub installation_location: String,
+    pub installation_location: String, 
+    #[serde(default)]
+    pub allow_external_ini_management: bool,
+    #[serde(default)]
+    pub use_external_rcon: bool,
     #[serde(default)]
     pub config_entries: ConfigEntries
 }

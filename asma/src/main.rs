@@ -15,7 +15,7 @@ use iced::{
 };
 
 use models::config::ConfigEntries;
-use server::{ServerMonitorCommand, UpdateServerProgress, ValidationResult, RconResponse};
+use server::{RconResponse, ServerMonitorCommand, UpdateServerProgress, ValidationResult};
 use steamcmd_utils::validate_steamcmd;
 use sysinfo::{System, SystemExt};
 use tantivy::Index;
@@ -42,11 +42,11 @@ use modal::Modal;
 use models::*;
 use uuid::Uuid;
 
+use crate::models::config::{ConfigLocation, IniFile, IniSection};
 use crate::server::{
     monitor_server, start_server, update_inis_from_settings, update_server, validate_server,
     RconMonitorSettings, UpdateMode,
 };
-use crate::models::config::{ConfigLocation, IniFile, IniSection};
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -104,7 +104,7 @@ pub enum AsyncNotification {
     AsyncStarted(Sender<AsyncNotification>),
     UpdateServerProgress(Uuid, UpdateServerProgress),
     UpdateServerRunState(Uuid, RunState),
-    RconResponse(Uuid, RconResponse)
+    RconResponse(Uuid, RconResponse),
 }
 
 #[derive(Debug, Clone)]
@@ -427,16 +427,20 @@ impl Application for AppState {
                     .config_entries
                     .try_get_bool_value("RCONEnabled", &rcon_settings_location)
                 {
-                    let address = "localhost";
-                    let password = server_settings
-                        .config_entries
-                        .try_get_string_value("ServerAdminPassword", &rcon_settings_location);
-                    let port = server_settings
-                        .config_entries
-                        .try_get_int_value("RCONPort", &rcon_settings_location);
-                    if let (Some(password), Some(port)) = (password, port) {
-                        let address = format!("{}:{}", address, port);
-                        Some(RconMonitorSettings { address, password })
+                    if !server_settings.use_external_rcon {
+                        let address = "localhost";
+                        let password = server_settings
+                            .config_entries
+                            .try_get_string_value("ServerAdminPassword", &rcon_settings_location);
+                        let port = server_settings
+                            .config_entries
+                            .try_get_int_value("RCONPort", &rcon_settings_location);
+                        if let (Some(password), Some(port)) = (password, port) {
+                            let address = format!("{}:{}", address, port);
+                            Some(RconMonitorSettings { address, password })
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
@@ -478,6 +482,8 @@ impl Application for AppState {
                         id: Uuid::new_v4(),
                         name: String::new(),
                         installation_location: String::new(),
+                        allow_external_ini_management: false,
+                        use_external_rcon: false,
                         config_entries: ConfigEntries::default(),
                     },
                     state: ServerState::default(),
@@ -614,16 +620,21 @@ impl Application for AppState {
                         .config_entries
                         .try_get_bool_value("RCONEnabled", &rcon_settings_location)
                     {
-                        let address = "localhost";
-                        let password = server_settings
-                            .config_entries
-                            .try_get_string_value("ServerAdminPassword", &rcon_settings_location);
-                        let port = server_settings
-                            .config_entries
-                            .try_get_int_value("RCONPort", &rcon_settings_location);
-                        if let (Some(password), Some(port)) = (password, port) {
-                            let address = format!("{}:{}", address, port);
-                            Some(RconMonitorSettings { address, password })
+                        if !server_settings.use_external_rcon {
+                            let address = "localhost";
+                            let password = server_settings.config_entries.try_get_string_value(
+                                "ServerAdminPassword",
+                                &rcon_settings_location,
+                            );
+                            let port = server_settings
+                                .config_entries
+                                .try_get_int_value("RCONPort", &rcon_settings_location);
+                            if let (Some(password), Some(port)) = (password, port) {
+                                let address = format!("{}:{}", address, port);
+                                Some(RconMonitorSettings { address, password })
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
@@ -637,7 +648,7 @@ impl Application for AppState {
                                 ServerMonitorCommand::AddServer {
                                     server_id,
                                     installation_dir,
-                                    rcon_settings
+                                    rcon_settings,
                                 },
                             ),
                             |_| Message::None,

@@ -203,27 +203,29 @@ pub fn update_inis_from_settings(
     let mut ini_files = HashMap::new();
 
     // Remove entries
-    for (file, section, entry) in entries_to_remove {
-        let ini_path = ensure_ini_path(&installation_dir, file)?;
+    if server_settings.allow_external_ini_management {
+        for (file, section, entry) in entries_to_remove {
+            let ini_path = ensure_ini_path(&installation_dir, file)?;
 
-        match ini_files.entry(file).or_insert_with(|| {
-            if std::fs::metadata(&ini_path).is_err() {
-                Ok(Ini::new())
-            } else {
-                Ini::load_from_file(&ini_path)
-            }
-        }) {
-            Ok(ini) => {
-                if let Some(_) = ini.delete_from(Some(section.to_string()), &entry.name) {
-                    trace!(
-                        "Removed {}:[{}] {}",
-                        file.to_string(),
-                        section.to_string(),
-                        entry.name,
-                    );
+            match ini_files.entry(file).or_insert_with(|| {
+                if std::fs::metadata(&ini_path).is_err() {
+                    Ok(Ini::new())
+                } else {
+                    Ini::load_from_file(&ini_path)
                 }
+            }) {
+                Ok(ini) => {
+                    if let Some(_) = ini.delete_from(Some(section.to_string()), &entry.name) {
+                        trace!(
+                            "Removed {}:[{}] {}",
+                            file.to_string(),
+                            section.to_string(),
+                            entry.name,
+                        );
+                    }
+                }
+                Err(e) => bail!("Failed to load ini file: {}", e.to_string()),
             }
-            Err(e) => bail!("Failed to load ini file: {}", e.to_string()),
         }
     }
 
