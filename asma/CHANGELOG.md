@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.19] - Fix #32 - Support Crossplay settings
+* Thanks @Lacoi for the PR
+
 [0.1.18] - Fix #20 - Import, Forget and Obliterate servers
 * Existing unmanaged servers can now be imported into ASMA
 * Managed servers can now be forgotten or obliterated
