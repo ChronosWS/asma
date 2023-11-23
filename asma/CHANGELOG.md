@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.15] - Support clean stops via RCON
+* The 'Stop' button will now save and shutdown cleanly, if you have RCON enabled
+
 [0.1.14] - Fix #22 - Support short descriptions
 * On server settings we now display the first part of the description
 * Also made clear what the location and type are in server settings

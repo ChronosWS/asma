@@ -40,9 +40,21 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
                 row![
                     text(format!(
                         "CPU: {:.2} MEM: {}{} PLAYERS: {}",
-                        run_data.cpu_usage, mem, unit, run_data.player_list.len()
+                        run_data.cpu_usage,
+                        mem,
+                        unit,
+                        run_data.player_list.len()
                     )),
                     horizontal_space(Length::Fill),
+                    make_button(
+                        "Stop",
+                        if run_data.rcon_enabled {
+                            Some(Message::StopServer(server.id()))
+                        } else {
+                            None
+                        },
+                        icons::SAVE.clone()
+                    ),
                     make_button(
                         "Kill",
                         Some(Message::KillServer(server.id())),

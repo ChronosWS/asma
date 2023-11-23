@@ -80,10 +80,15 @@ struct ServerProcessRecord {
     exe_path: PathBuf,
     pid: Pid,
     rcon_state: Option<RconState>,
+    is_stopping: bool,
 }
 
 // Special RCON queries that don't bubble up
-const LIST_PLAYERS_QUERY: i32 = -1;
+const EXEC_LIST_PLAYERS: i32 = -1;
+const EXEC_LIST_PLAYERS_COMMAND: &str = "ListPlayers";
+
+const EXEC_STOP: i32 = -2;
+const EXEC_STOP_COMMAND: &str = "DoExit";
 
 /// Watches the process stack for changes to this server's process state
 pub async fn monitor_server(
@@ -154,6 +159,7 @@ pub async fn monitor_server(
                                         exe_path,
                                         pid,
                                         rcon_state,
+                                        is_stopping: false,
                                     },
                                 );
                             } else {
@@ -170,15 +176,23 @@ pub async fn monitor_server(
                     }
                 }
                 Ok(ServerMonitorCommand::StopServer { server_id }) => {
-                    if let Some(_record) = server_records.get(&server_id) {
-                        todo!("Stop the server nicely, if RCON is set up");
+                    if let Some(record) = server_records.get_mut(&server_id) {
+                        try_send_rcon_command(
+                            record.server_id,
+                            &record.rcon_state,
+                            EXEC_STOP,
+                            EXEC_STOP_COMMAND,
+                        )
+                        .await;
+                        record.is_stopping = true;
                     }
                 }
                 Ok(ServerMonitorCommand::KillServer { server_id }) => {
-                    if let Some(record) = server_records.get(&server_id) {
+                    if let Some(record) = server_records.get_mut(&server_id) {
                         if let Some(process) = system.process(record.pid) {
                             trace!("Sending KILL to {}", record.pid);
                             process.kill_with(sysinfo::Signal::Kill);
+                            record.is_stopping = true;
                         }
                     }
                 }
@@ -206,16 +220,15 @@ pub async fn monitor_server(
             if let Some(list_players_response) = rcon_responses
                 .iter()
                 .rev()
-                .find(|r| r.id == LIST_PLAYERS_QUERY)
+                .find(|r| r.id == EXEC_LIST_PLAYERS)
             {
                 for (_, [num, name, user_id]) in player_list_regex
                     .captures_iter(&list_players_response.response)
                     .map(|c| c.extract())
                 {
-                    if let Ok(player_num) = num
-                        .parse::<usize>()
-                        .map_err(|e| error!("Failed to parse player number {}: {}", num, e.to_string()))
-                    {
+                    if let Ok(player_num) = num.parse::<usize>().map_err(|e| {
+                        error!("Failed to parse player number {}: {}", num, e.to_string())
+                    }) {
                         player_list.push(RconPlayerEntry {
                             player_num,
                             steam_id: user_id.to_owned(),
@@ -225,23 +238,18 @@ pub async fn monitor_server(
                 }
             }
 
-            if let Some(RconState::Connected { command_sender, .. }) = &mut record.rcon_state {
-                if let Err(e) = command_sender.try_send(RconCommand::Exec {
-                    id: LIST_PLAYERS_QUERY,
-                    command: "ListPlayers".to_owned(),
-                }) {
-                    warn!(
-                        "Monitor {}: Error sending command: {:?}",
-                        record.server_id, e
-                    );
-                } else {
-                    trace!(
-                        "Monitor {}: Sent command: {}",
-                        record.server_id,
-                        "ListPlayers"
-                    );
-                }
-            }
+            try_send_rcon_command(
+                record.server_id,
+                &record.rcon_state,
+                EXEC_LIST_PLAYERS,
+                EXEC_LIST_PLAYERS_COMMAND,
+            )
+            .await;
+            let rcon_enabled = if let Some(RconState::Connected { .. }) = &record.rcon_state {
+                true
+            } else {
+                false
+            };
 
             let process_exists = system.refresh_process(record.pid);
             if !process_exists {
@@ -262,12 +270,17 @@ pub async fn monitor_server(
                             pid: record.pid.as_u32(),
                             cpu_usage: process.cpu_usage(),
                             memory_usage: process.memory(),
-                            player_list: player_list.clone()
+                            rcon_enabled,
+                            player_list: player_list.clone(),
                         };
                         let _ = status_sender
                             .send(AsyncNotification::UpdateServerRunState(
                                 record.server_id,
-                                RunState::Available(run_data),
+                                if record.is_stopping {
+                                    RunState::Stopping
+                                } else {
+                                    RunState::Available(run_data)
+                                },
                             ))
                             .await;
                     }
@@ -297,11 +310,32 @@ pub async fn monitor_server(
             server_records.remove(&server_id);
         });
 
-        trace!("Monitor: Sleeping...");
+        // trace!("Monitor: Sleeping...");
         sleep(Duration::from_secs(5)).await;
     }
 }
 
+async fn try_send_rcon_command(
+    server_id: Uuid,
+    rcon_state: &Option<RconState>,
+    id: i32,
+    command: impl ToString,
+) {
+    if let Some(RconState::Connected { command_sender, .. }) = rcon_state {
+        if let Err(e) = command_sender.try_send(RconCommand::Exec {
+            id,
+            command: command.to_string(),
+        }) {
+            warn!("Monitor {}: Error sending command: {:?}", server_id, e);
+        } else {
+            // trace!(
+            //     "Monitor {}: Sent command: {}",
+            //     record.server_id,
+            //     "ListPlayers"
+            // );
+        }
+    }
+}
 async fn rcon_pump(
     server_id: Uuid,
     rcon_state: Option<RconState>,
@@ -353,16 +387,16 @@ async fn rcon_pump(
             command_sender,
             mut response_receiver,
         }) => {
-            trace!("Monitor {}: Peforming RCON pump", server_id);
+            // trace!("Monitor {}: Performing RCON pump", server_id);
             // Check for responses
             match response_receiver.try_recv() {
                 Ok(RconResponse::ExecResponse(response)) => {
-                    trace!(
-                        "Monitor {}: RCON Response: ({}) {}",
-                        server_id,
-                        response.id,
-                        response.response
-                    );
+                    // trace!(
+                    //     "Monitor {}: RCON Response: ({}) {}",
+                    //     server_id,
+                    //     response.id,
+                    //     response.response
+                    // );
                     rcon_responses.push(response);
                     Some(RconState::Connected {
                         command_sender,
@@ -414,13 +448,6 @@ async fn rcon_runner(
                         return Ok(());
                     }
                     RconCommand::Exec { id, command } => {
-                        trace!(
-                            "RCON {} ({}): Executing command: ({}) {}",
-                            server_id,
-                            rcon_settings.address,
-                            id,
-                            command
-                        );
                         let response = connection
                             .cmd(&command)
                             .await
@@ -430,11 +457,12 @@ async fn rcon_runner(
                             .map(|(_, r)| r)
                             .with_context(|| "Error sending command")?;
                         trace!(
-                            "RCON {} ({}): Response: ({}) {}",
+                            "RCON {} ({}): Command ({}): {} Response: {}",
                             server_id,
                             rcon_settings.address,
                             id,
-                            response
+                            command,
+                            response.trim_end()
                         );
                         match response_sender
                             .send(RconResponse::ExecResponse(RconExecResponse {

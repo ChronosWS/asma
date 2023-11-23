@@ -33,6 +33,7 @@ pub struct RunData {
     pub pid: u32,
     pub cpu_usage: f32,
     pub memory_usage: u64,
+    pub rcon_enabled: bool,
     pub player_list: Vec<RconPlayerEntry>
 }
 
