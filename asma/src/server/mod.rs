@@ -203,7 +203,7 @@ pub fn update_inis_from_settings(
     let mut ini_files = HashMap::new();
 
     // Remove entries
-    if server_settings.allow_external_ini_management {
+    if !server_settings.allow_external_ini_management {
         for (file, section, entry) in entries_to_remove {
             let ini_path = ensure_ini_path(&installation_dir, file)?;
 
