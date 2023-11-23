@@ -186,6 +186,30 @@ impl ConfigVariant {
             ConfigQuantity::Vector => Self::Vector(vec![]),
         }
     }
+
+    pub fn try_get_bool_value(&self) -> Option<bool> {
+        if let ConfigVariant::Scalar(ConfigValue::Bool(v)) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+
+    pub fn try_get_string_value(&self) -> Option<String> {
+        if let ConfigVariant::Scalar(ConfigValue::String(v)) = self {
+            Some(v.to_owned())
+        } else {
+            None
+        }
+    }
+
+    pub fn try_get_int_value(&self) -> Option<i64> {
+        if let ConfigVariant::Scalar(ConfigValue::Integer(v)) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -421,6 +445,30 @@ impl ConfigEntries {
             .iter()
             .enumerate()
             .find(|(_, e)| e.meta_location == *location && e.meta_name == name)
+    }
+
+    pub fn try_get_bool_value(
+        &self,
+        name: impl AsRef<str>,
+        location: &ConfigLocation,
+    ) -> Option<bool> {
+        self.find(name, location).map(|(_, e)| e)?.value.try_get_bool_value()
+    }
+
+    pub fn try_get_string_value(
+        &self,
+        name: impl AsRef<str>,
+        location: &ConfigLocation,
+    ) -> Option<String> {
+        self.find(name, location).map(|(_, e)| e)?.value.try_get_string_value()
+    }
+
+    pub fn try_get_int_value(
+        &self,
+        name: impl AsRef<str>,
+        location: &ConfigLocation,
+    ) -> Option<i64> {
+        self.find(name, location).map(|(_, e)| e)?.value.try_get_int_value()
     }
 }
 

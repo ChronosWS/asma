@@ -64,36 +64,36 @@ impl Connection {
         Ok((packet_id, received_packet.get_body().into()))
     }
 
-    async fn receive_response(&mut self) -> Result<String> {
-        self.receive_single_packet_response().await
-    }
+    // async fn receive_response(&mut self) -> Result<String> {
+    //     self.receive_single_packet_response().await
+    // }
 
-    async fn receive_single_packet_response(&mut self) -> Result<String> {
-        let received_packet = self.receive_packet().await?;
-        Ok(received_packet.get_body().into())
-    }
+    // async fn receive_single_packet_response(&mut self) -> Result<String> {
+    //     let received_packet = self.receive_packet().await?;
+    //     Ok(received_packet.get_body().into())
+    // }
 
-    async fn receive_multi_packet_response(&mut self) -> Result<String> {
-        // TODO: Currently there is an issue where sends and receives must be matched, otherwise 
-        // the process wedges on sending.
-        
-        // the server processes packets in order, so send an empty packet and
-        // remember its id to detect the end of a multi-packet response
-        let end_id = self.send(PacketType::ExecCommand, "").await?;
+    // async fn receive_multi_packet_response(&mut self) -> Result<String> {
+    //     // TODO: Currently there is an issue where sends and receives must be matched, otherwise 
+    //     // the process wedges on sending.
 
-        let mut result = String::new();
+    //     // the server processes packets in order, so send an empty packet and
+    //     // remember its id to detect the end of a multi-packet response
+    //     let end_id = self.send(PacketType::ExecCommand, "").await?;
 
-        loop {
-            let received_packet = self.receive_packet().await?;
+    //     let mut result = String::new();
 
-            if received_packet.get_id() == end_id {
-                // This is the response to the end-marker packet
-                return Ok(result);
-            }
+    //     loop {
+    //         let received_packet = self.receive_packet().await?;
 
-            result += received_packet.get_body();
-        }
-    }
+    //         if received_packet.get_id() == end_id {
+    //             // This is the response to the end-marker packet
+    //             return Ok(result);
+    //         }
+
+    //         result += received_packet.get_body();
+    //     }
+    // }
 
     async fn auth(&mut self, password: &str) -> Result<()> {
         self.send(PacketType::Auth, password).await?;

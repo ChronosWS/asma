@@ -39,13 +39,13 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
             container(
                 row![
                     text(format!(
-                        "CPU: {:.2} MEM: {}{}",
-                        run_data.cpu_usage, mem, unit
+                        "CPU: {:.2} MEM: {}{} PLAYERS: {}",
+                        run_data.cpu_usage, mem, unit, run_data.player_list.len()
                     )),
                     horizontal_space(Length::Fill),
                     make_button(
                         "Kill",
-                        Some(Message::StopServer(server.id())),
+                        Some(Message::KillServer(server.id())),
                         icons::STOP.clone()
                     )
                 ]

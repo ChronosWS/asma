@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.13] - RCON Support, players count
+* We now automatically establish an RCON connection if configured, and grab the player list
+* Currently we only display the player count
+
 [0.1.12] - Add GBUsageToForceRestart option 
 * This option will auto-restart server on high memory usage
 

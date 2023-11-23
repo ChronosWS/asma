@@ -15,7 +15,7 @@ use iced::{
 };
 
 use models::config::ConfigEntries;
-use server::{ServerMonitorCommand, UpdateServerProgress, ValidationResult};
+use server::{ServerMonitorCommand, UpdateServerProgress, ValidationResult, RconResponse};
 use steamcmd_utils::validate_steamcmd;
 use sysinfo::{System, SystemExt};
 use tantivy::Index;
@@ -44,8 +44,9 @@ use uuid::Uuid;
 
 use crate::server::{
     monitor_server, start_server, update_inis_from_settings, update_server, validate_server,
-    UpdateMode,
+    RconMonitorSettings, UpdateMode,
 };
+use crate::models::config::{ConfigLocation, IniFile, IniSection};
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -103,6 +104,7 @@ pub enum AsyncNotification {
     AsyncStarted(Sender<AsyncNotification>),
     UpdateServerProgress(Uuid, UpdateServerProgress),
     UpdateServerRunState(Uuid, RunState),
+    RconResponse(Uuid, RconResponse)
 }
 
 #[derive(Debug, Clone)]
@@ -125,6 +127,7 @@ pub enum Message {
     ServerValidated(Uuid, ValidationResult),
     StartServer(Uuid),
     StopServer(Uuid),
+    KillServer(Uuid),
     ServerRunStateChanged(Uuid, RunState),
 
     // Keyboard and Mouse events
@@ -328,7 +331,29 @@ impl Application for AppState {
             Message::ServerSettings(message) => server_settings::update(self, message),
             Message::MetadataEditor(message) => metadata_editor::update(self, message),
             Message::StopServer(server_id) => {
-                trace!("Stop Server {} (Not Implemented)", server_id);
+                trace!("Stop Server {} ", server_id);
+                let server_state = self
+                    .get_server_state_mut(server_id)
+                    .expect("Failed to look up server state");
+                if let RunState::Available(RunData { .. }) = server_state.run_state {
+                    server_state.run_state = RunState::Stopping;
+                    if let Some(command_channel) = self.monitor_command_channel.to_owned() {
+                        Command::perform(
+                            send_monitor_command(
+                                command_channel,
+                                ServerMonitorCommand::StopServer { server_id },
+                            ),
+                            |_| Message::None,
+                        )
+                    } else {
+                        Command::none()
+                    }
+                } else {
+                    Command::none()
+                }
+            }
+            Message::KillServer(server_id) => {
+                trace!("Stop Server {} ", server_id);
                 let server_state = self
                     .get_server_state_mut(server_id)
                     .expect("Failed to look up server state");
@@ -390,6 +415,34 @@ impl Application for AppState {
                     .expect("Failed to look up server settings")
                     .get_full_installation_location();
 
+                let server_settings = self
+                    .get_server_settings(server_id)
+                    .expect("Failed to get server settings");
+                let rcon_settings_location = ConfigLocation::IniOption(
+                    IniFile::GameUserSettings,
+                    IniSection::ServerSettings,
+                );
+
+                let rcon_settings = if let Some(true) = server_settings
+                    .config_entries
+                    .try_get_bool_value("RCONEnabled", &rcon_settings_location)
+                {
+                    let address = "localhost";
+                    let password = server_settings
+                        .config_entries
+                        .try_get_string_value("ServerAdminPassword", &rcon_settings_location);
+                    let port = server_settings
+                        .config_entries
+                        .try_get_int_value("RCONPort", &rcon_settings_location);
+                    if let (Some(password), Some(port)) = (password, port) {
+                        let address = format!("{}:{}", address, port);
+                        Some(RconMonitorSettings { address, password })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
                 let server_state = self
                     .get_server_state_mut(server_id)
                     .expect("Failed to look up server settings");
@@ -405,6 +458,7 @@ impl Application for AppState {
                                 ServerMonitorCommand::AddServer {
                                     server_id,
                                     installation_dir,
+                                    rcon_settings,
                                 },
                             ),
                             |_| Message::None,
@@ -501,7 +555,7 @@ impl Application for AppState {
                     install_time,
                 },
             ) => {
-                trace!("Server Validated {}", id);
+                trace!("Server Validated {}: {}", id, version);
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
@@ -521,7 +575,7 @@ impl Application for AppState {
                 Command::none()
             }
             Message::ServerValidated(id, ValidationResult::Failed(reason)) => {
-                warn!("Server Validation Failed {}", id);
+                warn!("Server Validation Failed {}: {}", id, reason);
                 let server_state = self
                     .get_server_state_mut(id)
                     .expect("Failed to look up server state");
@@ -550,7 +604,32 @@ impl Application for AppState {
                 // Start checking existing servers
                 run_state_commands.extend(self.servers.iter().map(|s| {
                     let server_id = s.id();
-                    let installation_dir = s.settings.get_full_installation_location();
+                    let server_settings = &s.settings;
+                    let installation_dir = server_settings.get_full_installation_location();
+                    let rcon_settings_location = ConfigLocation::IniOption(
+                        IniFile::GameUserSettings,
+                        IniSection::ServerSettings,
+                    );
+                    let rcon_settings = if let Some(true) = server_settings
+                        .config_entries
+                        .try_get_bool_value("RCONEnabled", &rcon_settings_location)
+                    {
+                        let address = "localhost";
+                        let password = server_settings
+                            .config_entries
+                            .try_get_string_value("ServerAdminPassword", &rcon_settings_location);
+                        let port = server_settings
+                            .config_entries
+                            .try_get_int_value("RCONPort", &rcon_settings_location);
+                        if let (Some(password), Some(port)) = (password, port) {
+                            let address = format!("{}:{}", address, port);
+                            Some(RconMonitorSettings { address, password })
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
                     if let Some(command_channel) = self.monitor_command_channel.to_owned() {
                         Command::perform(
                             send_monitor_command(
@@ -558,6 +637,7 @@ impl Application for AppState {
                                 ServerMonitorCommand::AddServer {
                                     server_id,
                                     installation_dir,
+                                    rcon_settings
                                 },
                             ),
                             |_| Message::None,
@@ -599,6 +679,10 @@ impl Application for AppState {
                     }
                 }
 
+                Command::none()
+            }
+            Message::AsyncNotification(AsyncNotification::RconResponse(server_id, response)) => {
+                trace!("RconResponse {}: {:?}", server_id, response);
                 Command::none()
             }
         }

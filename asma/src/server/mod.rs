@@ -33,7 +33,9 @@ use crate::{
 
 mod monitor;
 
-pub use monitor::{monitor_server, ServerMonitorCommand};
+pub use monitor::{
+    monitor_server, RconMonitorSettings, RconPlayerEntry, RconResponse, ServerMonitorCommand,
+};
 
 #[derive(Debug, Clone)]
 pub enum UpdateMode {

@@ -4,6 +4,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::server::RconPlayerEntry;
 use super::config::ConfigEntries;
 
 // WARNING: If you add non-Optional values here, you must give them defaults or you
@@ -31,7 +32,8 @@ impl ServerSettings {
 pub struct RunData {
     pub pid: u32,
     pub cpu_usage: f32,
-    pub memory_usage: u64
+    pub memory_usage: u64,
+    pub player_list: Vec<RconPlayerEntry>
 }
 
 impl RunData {
