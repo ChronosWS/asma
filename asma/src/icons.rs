@@ -17,6 +17,9 @@ pub static DOWNLOAD: image::Handle =
 pub static EDIT: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/Edit.ico")).into();
 #[dynamic]
+pub static FOLDER_DELETE: image::Handle =
+    image::Handle::from_memory(std::include_bytes!("../res/icons/FolderDelete.ico")).into();
+#[dynamic]
 pub static FOLDER_OPEN: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/FolderOpen.ico")).into();
 #[dynamic]

@@ -46,6 +46,7 @@ use crate::server::{
     monitor_server, start_server, update_inis_from_settings, update_server, validate_server,
     RconMonitorSettings, UpdateMode,
 };
+use crate::settings_utils::save_server_settings_with_error;
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -120,6 +121,7 @@ pub enum Message {
 
     // Servers
     NewServer,
+    ImportServer,
     EditServer(Uuid),
     InstallServer(Uuid, UpdateMode),
     ServerUpdated(Uuid),
@@ -474,7 +476,61 @@ impl Application for AppState {
                     Command::none()
                 }
             }
+            Message::ImportServer => {
+                trace!("Import Server");
+                if let Some(folder) = rfd::FileDialog::new()
+                    .set_title("Select directory")
+                    .pick_folder()
+                {
+                    if let Some(name) = folder.file_name() {
+                        let server = Server {
+                            settings: ServerSettings {
+                                id: Uuid::new_v4(),
+                                name: name
+                                    .to_str()
+                                    .expect("Failed to convert file name to string")
+                                    .to_owned(),
+                                installation_location: folder
+                                    .to_str()
+                                    .expect("Failed to convert path to string")
+                                    .to_owned(),
+                                allow_external_ini_management: true,
+                                use_external_rcon: false,
+                                config_entries: ConfigEntries::default(),
+                            },
+                            state: ServerState {
+                                install_state: InstallState::Validating,
+                                ..Default::default()
+                            },
+                        };
+                        let server_id = server.settings.id;
+                        let installation_dir = server.settings.installation_location.to_owned();
+                        let app_id = self.global_settings.app_id.to_owned();
 
+                        warn!("TODO: Import existing INI settings");
+                        save_server_settings_with_error(&self.global_settings, &server.settings);
+                        self.servers.push(server);
+
+                        Command::perform(
+                            validate_server(server_id, installation_dir, app_id),
+                            move |result| {
+                                result
+                                    .map(|r| Message::ServerValidated(server_id, r))
+                                    .unwrap_or_else(|e| {
+                                        Message::ServerValidated(
+                                            server_id,
+                                            ValidationResult::Failed(e.to_string()),
+                                        )
+                                    })
+                            },
+                        )
+                    } else {
+                        Command::none()
+                    }
+                } else {
+                    Command::none()
+                }
+            }
             Message::NewServer => {
                 trace!("TODO: New Server");
                 let server = Server {
@@ -704,11 +760,16 @@ impl Application for AppState {
         let bottom_pane = if let SteamCmdState::Installed = self.global_state.steamcmd_state {
             container(
                 column![
-                    row![make_button(
-                        "New Server",
-                        Some(Message::NewServer),
-                        icons::ADD.clone()
-                    )],
+                    row![
+                        make_button("New Server", Some(Message::NewServer), icons::ADD.clone()),
+                        make_button(
+                            "Import...",
+                            Some(Message::ImportServer),
+                            icons::DOWNLOAD.clone()
+                        )
+                    ]
+                    .spacing(5)
+                    .align_items(iced::Alignment::Center),
                     if self.servers.is_empty() {
                         container(
                             text("NO SERVERS YET")

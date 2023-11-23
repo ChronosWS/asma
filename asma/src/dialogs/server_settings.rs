@@ -7,14 +7,18 @@ use iced::{
     },
     Alignment, Background, BorderRadius, Color, Command, Element, Length, Theme,
 };
+use rfd::MessageDialogResult;
 use tracing::{error, info, trace};
 
 use crate::{
     components::make_button,
     config_utils::{query_metadata_index, QueryResult},
     icons,
-    models::config::{ConfigEntries, ConfigEntry, ConfigMetadata, ConfigVariant},
-    settings_utils::save_server_settings_with_error,
+    models::{
+        config::{ConfigEntries, ConfigEntry, ConfigMetadata, ConfigVariant},
+        RunState,
+    },
+    settings_utils::{remove_server_settings, save_server_settings_with_error},
     AppState, MainWindowMode, Message,
 };
 
@@ -38,6 +42,8 @@ pub struct ServerSettingsContext {
 #[derive(Debug, Clone)]
 pub enum ServerSettingsMessage {
     CloseServerSettings,
+    ForgetServer,
+    DeleteServer,
     ServerSetName(String),
     OpenServerInstallationDirectory,
     SetServerInstallationDirectory,
@@ -89,6 +95,52 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                     save_server_settings_with_error(&app_state.global_settings, &server.settings);
                 }
                 app_state.mode = MainWindowMode::Servers;
+                Command::none()
+            }
+            ServerSettingsMessage::ForgetServer => {
+                if let MessageDialogResult::Ok = rfd::MessageDialog::new()
+                    .set_title("Forget Server?")
+                    .set_description(
+                        "This will remove the server from ASMA, but will not delete any files.",
+                    )
+                    .set_buttons(rfd::MessageButtons::OkCancel)
+                    .show()
+                {
+                    if let Some(server) = app_state.servers.get(server_id) {
+                        let _ =
+                            remove_server_settings(&app_state.global_settings, &server.settings)
+                                .map_err(|e| {
+                                    error!("Failed to remove server settings: {}", e.to_string())
+                                });
+                    }
+                    app_state.servers.remove(server_id);
+                    app_state.mode = MainWindowMode::Servers;
+                }
+                Command::none()
+            }
+            ServerSettingsMessage::DeleteServer => {
+                if let MessageDialogResult::Ok = rfd::MessageDialog::new()
+                    .set_title("Obliterate Server?")
+                    .set_description(
+                        "This will DELETE ALL FILES AND CONFIGURATION associated with this server. This CANNOT BE UNDONE.",
+                    )
+                    .set_buttons(rfd::MessageButtons::OkCancel)
+                    .show()
+                {
+                    if let Some(server) = app_state.servers.get(server_id) {
+                        let _ =
+                            remove_server_settings(&app_state.global_settings, &server.settings)
+                                .map_err(|e| {
+                                    error!("Failed to remove server settings: {}", e.to_string())
+                                });
+                        let _ = std::fs::remove_dir_all(&server.settings.installation_location).map_err(|e| {
+                                    error!("Failed to remove server directory: {}", e.to_string())
+                                });
+                    }
+                    
+                    app_state.servers.remove(server_id);
+                    app_state.mode = MainWindowMode::Servers;
+                }
                 Command::none()
             }
             ServerSettingsMessage::OpenServerInstallationDirectory => {
@@ -300,11 +352,12 @@ pub(crate) fn make_dialog<'a>(
     app_state: &'a AppState,
     settings_context: &'a ServerSettingsContext,
 ) -> Container<'a, Message> {
-    let server_settings = &app_state
+    let server = &app_state
         .servers
         .get(settings_context.server_id)
-        .expect("Failed to find server id")
-        .settings;
+        .expect("Failed to find server id");
+
+    let server_settings = &server.settings;
 
     let is_not_editing =
         if let ServerSettingsEditContext::NotEditing { .. } = settings_context.edit_context {
@@ -312,6 +365,12 @@ pub(crate) fn make_dialog<'a>(
         } else {
             false
         };
+
+    let is_stopped = if let RunState::Stopped = &server.state.run_state {
+        true
+    } else {
+        false
+    };
 
     fn get_union_of_effective_and_server(
         effective: &ConfigMetadata,
@@ -657,14 +716,27 @@ pub(crate) fn make_dialog<'a>(
                 text("Server Settings").size(25),
                 horizontal_space(Length::Fill),
                 make_button(
+                    "Obliterate",
+                    (is_stopped && is_not_editing).then_some(ServerSettingsMessage::DeleteServer.into()),
+                    icons::FOLDER_DELETE.clone()
+                ),
+                make_button(
+                    "Forget",
+                    (is_stopped && is_not_editing).then_some(ServerSettingsMessage::ForgetServer.into()),
+                    icons::DELETE.clone()
+                ),
+                make_button(
                     "",
                     is_not_editing.then_some(ServerSettingsMessage::CloseServerSettings.into()),
                     icons::SAVE.clone()
                 )
-            ],
+            ]
+            .spacing(5)
+            .align_items(Alignment::Center),
             row![text("Id:").width(100), text(server_settings.id.to_owned()),]
                 .spacing(5)
-                .height(32),
+                .height(32)
+                .align_items(Alignment::Center),
             row![
                 text("Name:")
                     .width(100)
@@ -673,7 +745,8 @@ pub(crate) fn make_dialog<'a>(
                     .on_input(|v| { ServerSettingsMessage::ServerSetName(v).into() }),
                 horizontal_space(Length::Fill),
             ]
-            .spacing(5),
+            .spacing(5)
+            .align_items(Alignment::Center),
             row![
                 text("Installation:")
                     .width(100)

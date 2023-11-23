@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use static_init::dynamic;
 use tracing::{error, trace};
 
@@ -152,6 +152,16 @@ pub fn save_server_settings_with_error(
         )
     });
 }
+
+pub fn remove_server_settings(
+    global_settings: &GlobalSettings,
+    server_settings: &ServerSettings,
+) -> Result<()> {
+    let server_file = Path::new(&global_settings.profiles_directory)
+        .join(format!("{}.json", server_settings.id.to_string()));
+    std::fs::remove_file(server_file).with_context(|| "Failed to remove server settings file")
+}
+
 pub fn save_server_settings(
     global_settings: &GlobalSettings,
     server_settings: &ServerSettings,

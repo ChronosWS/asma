@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.18] - Fix #20 - Import, Forget and Obliterate servers
+* Existing unmanaged servers can now be imported into ASMA
+* Managed servers can now be forgotten or obliterated
+
 [0.1.17] - Fix #13 - New servers now use named directories rather than ids
 
 [0.1.16] - Settings for external server management
