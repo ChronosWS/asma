@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.11] - Fix Port being the wrong kind of setting, Duration for MOTD
+* Thanks @Lacoi for the PR
+
 [0.1.10] - Fix #30 (Escaping) and #28 (Removing settings)
 * Strings which need escaping are now escaped in the INI files
 * When an override is removed from Settings, it will also be removed from the INI next time the server runs
