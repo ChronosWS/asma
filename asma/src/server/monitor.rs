@@ -164,15 +164,34 @@ pub async fn monitor_server(
                                 );
                             } else {
                                 warn!("Failed to find server process for {} ({}).  This might be OK on startup if the server isn't running", server_id, exe_path.display());
+                                // TODO: These failure path calls could use some cleanup
+                                let _ = status_sender
+                                    .send(AsyncNotification::UpdateServerRunState(
+                                        server_id,
+                                        RunState::Stopped,
+                                    ))
+                                    .await;
                             }
                         } else {
-                            error!("Failed to canonicalize path {}", path.display())
+                            error!("Failed to canonicalize path {}", path.display());
+                            let _ = status_sender
+                                .send(AsyncNotification::UpdateServerRunState(
+                                    server_id,
+                                    RunState::Stopped,
+                                ))
+                                .await;
                         }
                     } else {
                         warn!(
                             "Path {} doesn't exist - maybe this server isn't installed yet?",
                             path.display()
                         );
+                        let _ = status_sender
+                            .send(AsyncNotification::UpdateServerRunState(
+                                server_id,
+                                RunState::Stopped,
+                            ))
+                            .await;
                     }
                 }
                 Ok(ServerMonitorCommand::StopServer { server_id }) => {
