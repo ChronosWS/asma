@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.1.22] - Add AlwaysTickDedicatedSkeletalMeshes and CustomNotificationURL
+* Thanks @Lacoi for the PR
+
 [0.1.21] - Fix #34 - Set state to Stopped if we can't find the server
 
 [0.1.20] - Fix bug with external INI management
