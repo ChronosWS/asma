@@ -15,7 +15,7 @@ use crate::{
     config_utils::{query_metadata_index, QueryResult},
     icons,
     models::{
-        config::{ConfigEntries, ConfigEntry, ConfigMetadata, ConfigVariant},
+        config::{ConfigEntries, ConfigEntry, ConfigMetadata},
         RunState,
     },
     settings_utils::{remove_server_settings, save_server_settings_with_error},
@@ -229,7 +229,7 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                             from_query,
                             metadata_id,
                             setting_id: server.settings.config_entries.entries.len() - 1,
-                            editor: editor_for(&metadata.name, &metadata.location, edit_value),
+                            editor: editor_for(metadata.value_type.clone(),edit_value),
                             current_value: metadata
                                 .default_value
                                 .as_ref()
@@ -257,13 +257,14 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                     .entries
                     .get(setting_id)
                     .expect("Failed to get setting");
+                let metadata = &app_state.config_metadata_state.effective().entries[metadata_id];
                 app_state.mode = MainWindowMode::EditProfile(ServerSettingsContext {
                     server_id,
                     edit_context: ServerSettingsEditContext::Editing {
                         from_query,
                         metadata_id,
                         setting_id,
-                        editor: editor_for(&setting.meta_name, &setting.meta_location, setting.value.clone()),
+                        editor: editor_for(metadata.value_type.clone(),  setting.value.clone()),
                         current_value: setting.value.to_string(),
                     },
                 });
@@ -295,9 +296,8 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
             }
             ServerSettingsMessage::SaveSetting {
                 from_query,
-                metadata_id,
                 setting_id,
-                value,
+                ..
             } => {
                 let server = app_state
                     .servers

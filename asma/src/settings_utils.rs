@@ -9,7 +9,7 @@ use crate::models::{
         ConfigMetadata, ConfigQuantity, ConfigValue, ConfigValueBaseType, ConfigValueType,
         ConfigVariant,
     },
-    get_default_app_id, get_default_patch_notes_url, GlobalSettings, Server, ServerSettings,
+    get_default_app_id, get_default_patch_notes_url, GlobalSettings, ServerSettings,
     ThemeType,
 };
 

@@ -11,7 +11,7 @@ use tantivy::{
     schema::{Schema, INDEXED, STORED, TEXT},
     Index, Score,
 };
-use tracing::{error, trace, warn};
+use tracing::{trace, warn};
 
 use crate::{
     models::config::{

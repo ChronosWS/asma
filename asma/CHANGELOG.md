@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.1] - Fix #11 - Support for vectors
+* Vector-type values, such as `mods` now have a vector editor.  The `mods` config value
+  is now also converted to a vector type.
+
 [0.2.0] - Fix #10 - Support enumerated values
 * This change lays the foundation for complex-valued types like enumerations,
   vectors and structured data such as for engram and spawn definitions.  This may

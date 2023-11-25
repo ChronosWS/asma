@@ -2,6 +2,9 @@ use iced::widget::image;
 use static_init::dynamic;
 
 #[dynamic]
+pub static ASMA_STEVE: image::Handle =
+    image::Handle::from_memory(std::include_bytes!("../res/icons/ASMA_SteveLastics.png")).into();
+#[dynamic]
 pub static ADD: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/Add.ico")).into();
 #[dynamic]
@@ -10,6 +13,9 @@ pub static CANCEL: image::Handle =
 #[dynamic]
 pub static DELETE: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/Delete.ico")).into();
+#[dynamic]
+pub static DOWN: image::Handle =
+    image::Handle::from_memory(std::include_bytes!("../res/icons/Down.ico")).into();
 #[dynamic]
 pub static DOWNLOAD: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/Download.ico")).into();
