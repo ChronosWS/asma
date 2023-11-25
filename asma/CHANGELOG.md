@@ -1,5 +1,11 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.0] - Fix #10 - Support enumerated values
+* This change lays the foundation for complex-valued types like enumerations,
+  vectors and structured data such as for engram and spawn definitions.  This may
+  be unstable and *could* cause breaks loading servers.
+* BACKUP YOUR DATA AND asma.exe in case you need to roll back
+
 [0.1.22] - Add AlwaysTickDedicatedSkeletalMeshes and CustomNotificationURL
 * Thanks @Lacoi for the PR
 

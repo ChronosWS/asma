@@ -11,7 +11,7 @@ use rfd::MessageDialogResult;
 use tracing::{error, info, trace};
 
 use crate::{
-    components::make_button,
+    components::{make_button, SettingEditor, editor_for, SettingEditorMessage},
     config_utils::{query_metadata_index, QueryResult},
     icons,
     models::{
@@ -30,6 +30,7 @@ pub enum ServerSettingsEditContext {
         from_query: String,
         metadata_id: usize,
         setting_id: usize,
+        editor: SettingEditor,
         current_value: String,
     },
 }
@@ -47,6 +48,8 @@ pub enum ServerSettingsMessage {
     ServerSetName(String),
     OpenServerInstallationDirectory,
     SetServerInstallationDirectory,
+
+    SettingsEditor(SettingEditorMessage),
 
     OverrideSetting {
         from_query: String,
@@ -81,7 +84,7 @@ pub enum ServerSettingsMessage {
 }
 
 pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -> Command<Message> {
-    if let MainWindowMode::EditProfile(ServerSettingsContext { server_id, .. }) = &app_state.mode {
+    if let MainWindowMode::EditProfile(ServerSettingsContext { server_id, edit_context }) = &mut app_state.mode {
         let server_id = *server_id;
         match message {
             ServerSettingsMessage::ServerSetName(name) => {
@@ -95,6 +98,11 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                     save_server_settings_with_error(&app_state.global_settings, &server.settings);
                 }
                 app_state.mode = MainWindowMode::Servers;
+                Command::none()
+            }
+            ServerSettingsMessage::SettingsEditor(m) => if let ServerSettingsEditContext::Editing {  editor, .. } = edit_context {
+                editor.update(m)
+            } else {
                 Command::none()
             }
             ServerSettingsMessage::ForgetServer => {
@@ -213,6 +221,7 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                         .expect("Failed to look up config metadata");
 
                     let new_entry: ConfigEntry = metadata.into();
+                    let edit_value = new_entry.value.clone();
                     server.settings.config_entries.entries.push(new_entry);
                     app_state.mode = MainWindowMode::EditProfile(ServerSettingsContext {
                         server_id,
@@ -220,6 +229,7 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                             from_query,
                             metadata_id,
                             setting_id: server.settings.config_entries.entries.len() - 1,
+                            editor: editor_for(&metadata.name, &metadata.location, edit_value),
                             current_value: metadata
                                 .default_value
                                 .as_ref()
@@ -253,6 +263,7 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                         from_query,
                         metadata_id,
                         setting_id,
+                        editor: editor_for(&setting.meta_name, &setting.meta_location, setting.value.clone()),
                         current_value: setting.value.to_string(),
                     },
                 });
@@ -292,34 +303,20 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                     .servers
                     .get_mut(server_id)
                     .expect("Failed to find server");
-                let metadata = app_state
-                    .config_metadata_state
-                    .effective()
-                    .entries
-                    .get(metadata_id)
-                    .expect("Failed to find config metadata");
                 let setting = server
                     .settings
                     .config_entries
                     .entries
                     .get_mut(setting_id)
                     .expect("Failed to find setting");
-                match ConfigVariant::from_type_and_value(&metadata.value_type, &value) {
-                    Ok(v) => {
-                        setting.value = v;
-                        app_state.mode = MainWindowMode::EditProfile(ServerSettingsContext {
-                            server_id,
-                            edit_context: ServerSettingsEditContext::NotEditing {
-                                query: from_query,
-                            },
-                        })
-                    }
-                    Err(e) => error!(
-                        "Could not parse {} as {}: {}",
-                        value,
-                        metadata.value_type,
-                        e.to_string()
-                    ),
+                if let ServerSettingsEditContext::Editing { editor, .. } = edit_context {
+                    setting.value = editor.value().clone();
+                    app_state.mode = MainWindowMode::EditProfile(ServerSettingsContext {
+                        server_id,
+                        edit_context: ServerSettingsEditContext::NotEditing {
+                            query: from_query,
+                        },
+                    })
                 }
                 Command::none()
             }
@@ -613,6 +610,7 @@ pub(crate) fn make_dialog<'a>(
             from_query,
             metadata_id,
             setting_id,
+            editor,
             current_value,
         } => {
             let metadata = app_state
@@ -683,18 +681,19 @@ pub(crate) fn make_dialog<'a>(
                 .spacing(5)
                 .align_items(Alignment::Center),
                 row![text(&metadata.description).size(12)],
-                row![
-                    text("Value:"),
-                    text_input("Value...", current_value).on_input(|value| {
-                        ServerSettingsMessage::ValueChanged {
-                            setting_id: *setting_id,
-                            value,
-                        }
-                        .into()
-                    })
-                ]
-                .spacing(5)
-                .align_items(Alignment::Center)
+                editor.view(app_state.config_metadata_state.effective(), |m| ServerSettingsMessage::SettingsEditor(m).into()),
+                // row![
+                //     text("Value:"),
+                //     text_input("Value...", current_value).on_input(|value| {
+                //         ServerSettingsMessage::ValueChanged {
+                //             setting_id: *setting_id,
+                //             value,
+                //         }
+                //         .into()
+                //     })
+                // ]
+                // .spacing(5)
+                // .align_items(Alignment::Center)
             ]
             .spacing(5)
         }

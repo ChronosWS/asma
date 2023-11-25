@@ -202,17 +202,20 @@ impl Application for AppState {
             local_config_metadata,
         );
 
-        let servers = settings_utils::load_server_settings(&global_settings)
-            .expect("Failed to load server settings")
-            .drain(..)
-            .map(|settings| Server {
-                settings,
-                state: ServerState {
-                    install_state: InstallState::Validating,
-                    run_state: RunState::NotInstalled,
-                },
-            })
-            .collect::<Vec<_>>();
+        let servers = settings_utils::load_server_settings(
+            &global_settings,
+            config_metadata_state.effective(),
+        )
+        .expect("Failed to load server settings")
+        .drain(..)
+        .map(|settings| Server {
+            settings,
+            state: ServerState {
+                install_state: InstallState::Validating,
+                run_state: RunState::NotInstalled,
+            },
+        })
+        .collect::<Vec<_>>();
 
         let mut startup_commands = vec![
             font::load(std::borrow::Cow::from(arial_bytes))

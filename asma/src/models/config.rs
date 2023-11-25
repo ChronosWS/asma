@@ -109,7 +109,7 @@ pub enum ConfigValue {
     Float(f32),
     Integer(i64),
     String(String),
-    Enum { name: String, value: String },
+    Enum { enum_name: String, value: String },
 }
 
 impl Display for ConfigValue {
@@ -119,7 +119,7 @@ impl Display for ConfigValue {
             Self::Float(v) => write!(f, "{}", v),
             Self::Integer(v) => write!(f, "{}", v),
             Self::String(v) => write!(f, "{}", v),
-            Self::Enum { name, value } => write!(f, "{}::{}", name, value),
+            Self::Enum { value, .. } => write!(f, "{}", value),
         }
     }
 }
@@ -264,7 +264,7 @@ impl From<&ConfigValue> for ConfigValueBaseType {
             ConfigValue::Float(_) => ConfigValueBaseType::Float,
             ConfigValue::Integer(_) => ConfigValueBaseType::Integer,
             ConfigValue::String(_) => ConfigValueBaseType::String,
-            ConfigValue::Enum { name, .. } => ConfigValueBaseType::Enum(name.to_owned()),
+            ConfigValue::Enum { enum_name, .. } => ConfigValueBaseType::Enum(enum_name.to_owned()),
         }
     }
 }
@@ -325,9 +325,32 @@ impl ConfigValueType {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct EnumerationEntry {
+    pub display_name: String,
+    pub value: String
+}
+
+// NOTE: This is for display in pick lists
+impl Display for EnumerationEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.display_name)
+    }
+}
+
+// NOTE: This is for pick lists
+impl PartialEq for EnumerationEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+// NOTE: This is for pick lists
+impl Eq for EnumerationEntry {}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Enumeration {
     pub name: String,
-    pub values: Vec<(String, String)>,
+    pub values: Vec<EnumerationEntry>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

@@ -5,7 +5,12 @@ use static_init::dynamic;
 use tracing::{error, trace};
 
 use crate::models::{
-    get_default_app_id, get_default_patch_notes_url, GlobalSettings, ServerSettings, ThemeType,
+    config::{
+        ConfigMetadata, ConfigQuantity, ConfigValue, ConfigValueBaseType, ConfigValueType,
+        ConfigVariant,
+    },
+    get_default_app_id, get_default_patch_notes_url, GlobalSettings, Server, ServerSettings,
+    ThemeType,
 };
 
 #[dynamic]
@@ -102,7 +107,10 @@ pub fn save_global_settings(global_settings: &GlobalSettings) -> Result<()> {
     Ok(std::fs::write(&global_settings_path, global_settings_json)?)
 }
 
-pub fn load_server_settings(global_settings: &GlobalSettings) -> Result<Vec<ServerSettings>> {
+pub fn load_server_settings(
+    global_settings: &GlobalSettings,
+    config_metadata: &ConfigMetadata,
+) -> Result<Vec<ServerSettings>> {
     trace!(
         "Loading server settings from {}",
         global_settings.profiles_directory
@@ -118,25 +126,53 @@ pub fn load_server_settings(global_settings: &GlobalSettings) -> Result<Vec<Serv
                 server_settings.name,
                 server_settings.id
             );
+
             // Fix up installation path.
-            let mut installation_location = PathBuf::from(&server_settings.installation_location);
-            if installation_location.ends_with(&server_settings.id.to_string()) {
-                // Already fixed up
-            } else if installation_location.ends_with(&server_settings.name) {
-                // New style
-            } else {
-                // Fix up
-                installation_location.push(server_settings.id.to_string())
-            }
-            server_settings.installation_location = installation_location
-                .to_str()
-                .expect("Failed to convert path to string")
-                .to_owned();
+            fixup_installation_path(&mut server_settings);
+            fixup_enumerations(config_metadata, &mut server_settings);
             result.push(server_settings);
         }
     }
 
     Ok(result)
+}
+
+fn fixup_enumerations(config_metadata: &ConfigMetadata, server_settings: &mut ServerSettings) {
+    for setting_entry in server_settings.config_entries.entries.iter_mut() {
+        if let Some((_, metadata_entry)) =
+            config_metadata.find_entry(&setting_entry.meta_name, &setting_entry.meta_location)
+        {
+            if let ConfigValueType {
+                quantity: ConfigQuantity::Scalar,
+                base_type: ConfigValueBaseType::Enum(enum_name),
+            } = &metadata_entry.value_type
+            {
+                // Base type is enum, if the value type is String, map the string into the enum and replace the value
+                if let ConfigVariant::Scalar(ConfigValue::String(value)) = &setting_entry.value {
+                    setting_entry.value = ConfigVariant::Scalar(ConfigValue::Enum {
+                        enum_name: enum_name.to_owned(),
+                        value: value.to_owned(),
+                    })
+                }
+            }
+        }
+    }
+}
+
+fn fixup_installation_path(server_settings: &mut ServerSettings) {
+    let mut installation_location = PathBuf::from(&server_settings.installation_location);
+    if installation_location.ends_with(&server_settings.id.to_string()) {
+        // Already fixed up
+    } else if installation_location.ends_with(&server_settings.name) {
+        // New style
+    } else {
+        // Fix up
+        installation_location.push(server_settings.id.to_string())
+    }
+    server_settings.installation_location = installation_location
+        .to_str()
+        .expect("Failed to convert path to string")
+        .to_owned();
 }
 
 pub fn save_server_settings_with_error(
