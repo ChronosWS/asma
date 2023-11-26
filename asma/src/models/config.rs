@@ -104,12 +104,19 @@ impl Display for ConfigLocation {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ConfigStructFieldVariant {
+    pub name: String,
+    pub value: ConfigVariant,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum ConfigValue {
     Bool(bool),
     Float(f32),
     Integer(i64),
     String(String),
     Enum { enum_name: String, value: String },
+    Struct(Vec<ConfigStructFieldVariant>),
 }
 
 impl Display for ConfigValue {
@@ -120,6 +127,13 @@ impl Display for ConfigValue {
             Self::Integer(v) => write!(f, "{}", v),
             Self::String(v) => write!(f, "{}", v),
             Self::Enum { value, .. } => write!(f, "{}", value),
+            Self::Struct(fields) => {
+                writeln!(f, "Struct")?;
+                for field in fields.iter() {
+                    writeln!(f, "  {} = {}", field.name, field.value)?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -132,6 +146,7 @@ impl ConfigValue {
             ConfigValueBaseType::Float => Self::Float(value.parse::<f32>()?),
             ConfigValueBaseType::String => Self::String(value.to_owned()),
             ConfigValueBaseType::Enum(_enum) => bail!("Enum parsing not supported yet"),
+            ConfigValueBaseType::Struct(_) => bail!("Struct parsing not supported yet"),
         })
     }
 
@@ -141,7 +156,20 @@ impl ConfigValue {
             ConfigValueBaseType::Float => Self::Float(0.0),
             ConfigValueBaseType::Integer => Self::Integer(0),
             ConfigValueBaseType::String => Self::String(String::new()),
-            ConfigValueBaseType::Enum(_enum) => panic!("Enum construction not supported yet"),
+            ConfigValueBaseType::Enum(name) => Self::Enum {
+                enum_name: name.clone(),
+                value: String::default(),
+            },
+            ConfigValueBaseType::Struct(fields) => {
+                let mut field_variants = Vec::new();
+                for field in fields.iter() {
+                    field_variants.push(ConfigStructFieldVariant {
+                        name: field.name.clone(),
+                        value: ConfigVariant::default_from_type(&field.value_type),
+                    })
+                }
+                Self::Struct(field_variants)
+            }
         }
     }
 }
@@ -212,6 +240,24 @@ impl ConfigVariant {
     }
 }
 
+impl AsRef<ConfigVariant> for ConfigVariant {
+    fn as_ref(&self) -> &ConfigVariant {
+        &self
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct ConfigStructFieldType {
+    pub name: String,
+    pub value_type: ConfigValueType,
+}
+
+impl Display for ConfigStructFieldType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.name, self.value_type)
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub enum ConfigValueBaseType {
     Bool,
@@ -219,21 +265,31 @@ pub enum ConfigValueBaseType {
     Integer,
     String,
     Enum(String),
+    Struct(Vec<ConfigStructFieldType>),
 }
 
 impl Display for ConfigValueBaseType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Bool => "Bool",
-                Self::Float => "Float",
-                Self::Integer => "Integer",
-                Self::String => "String",
-                Self::Enum(name) => name.as_str(),
+        if let Self::Struct(fields) = self {
+            writeln!(f, "Struct")?;
+            for field in fields.iter() {
+                writeln!(f, "  {}", field)?;
             }
-        )
+            Ok(())
+        } else {
+            write!(
+                f,
+                "{}",
+                match self {
+                    Self::Bool => "Bool",
+                    Self::Float => "Float",
+                    Self::Integer => "Integer",
+                    Self::String => "String",
+                    Self::Enum(name) => name.as_str(),
+                    _ => unreachable!(),
+                }
+            )
+        }
     }
 }
 
@@ -265,6 +321,17 @@ impl From<&ConfigValue> for ConfigValueBaseType {
             ConfigValue::Integer(_) => ConfigValueBaseType::Integer,
             ConfigValue::String(_) => ConfigValueBaseType::String,
             ConfigValue::Enum { enum_name, .. } => ConfigValueBaseType::Enum(enum_name.to_owned()),
+            ConfigValue::Struct(fields) => {
+                let mut base_fields = Vec::new();
+                for field in fields.iter() {
+                    let base_field = ConfigStructFieldType {
+                        name: field.name.to_owned(),
+                        value_type: field.value.as_ref().into(),
+                    };
+                    base_fields.push(base_field);
+                }
+                ConfigValueBaseType::Struct(base_fields)
+            }
         }
     }
 }
@@ -313,6 +380,18 @@ impl Display for ConfigValueType {
     }
 }
 
+impl From<&ConfigValue> for ConfigValueType {
+    fn from(value: &ConfigValue) -> Self {
+        todo!()
+    }
+}
+
+impl From<&ConfigVariant> for ConfigValueType {
+    fn from(value: &ConfigVariant) -> Self {
+        todo!()
+    }
+}
+
 impl ConfigValueType {
     pub fn infer_from(value: impl AsRef<str>) -> Self {
         let value = value.as_ref();
@@ -327,7 +406,7 @@ impl ConfigValueType {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EnumerationEntry {
     pub display_name: String,
-    pub value: String
+    pub value: String,
 }
 
 // NOTE: This is for display in pick lists
@@ -475,7 +554,10 @@ impl ConfigEntries {
         name: impl AsRef<str>,
         location: &ConfigLocation,
     ) -> Option<bool> {
-        self.find(name, location).map(|(_, e)| e)?.value.try_get_bool_value()
+        self.find(name, location)
+            .map(|(_, e)| e)?
+            .value
+            .try_get_bool_value()
     }
 
     pub fn try_get_string_value(
@@ -483,7 +565,10 @@ impl ConfigEntries {
         name: impl AsRef<str>,
         location: &ConfigLocation,
     ) -> Option<String> {
-        self.find(name, location).map(|(_, e)| e)?.value.try_get_string_value()
+        self.find(name, location)
+            .map(|(_, e)| e)?
+            .value
+            .try_get_string_value()
     }
 
     pub fn try_get_int_value(
@@ -491,7 +576,10 @@ impl ConfigEntries {
         name: impl AsRef<str>,
         location: &ConfigLocation,
     ) -> Option<i64> {
-        self.find(name, location).map(|(_, e)| e)?.value.try_get_int_value()
+        self.find(name, location)
+            .map(|(_, e)| e)?
+            .value
+            .try_get_int_value()
     }
 }
 

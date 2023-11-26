@@ -682,18 +682,6 @@ pub(crate) fn make_dialog<'a>(
                 .align_items(Alignment::Center),
                 row![text(&metadata.description).size(12)],
                 editor.view(app_state.config_metadata_state.effective(), |m| ServerSettingsMessage::SettingsEditor(m).into()),
-                // row![
-                //     text("Value:"),
-                //     text_input("Value...", current_value).on_input(|value| {
-                //         ServerSettingsMessage::ValueChanged {
-                //             setting_id: *setting_id,
-                //             value,
-                //         }
-                //         .into()
-                //     })
-                // ]
-                // .spacing(5)
-                // .align_items(Alignment::Center)
             ]
             .spacing(5)
         }

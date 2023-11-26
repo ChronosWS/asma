@@ -1,5 +1,10 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.2] - Fix #12 - Support for complex values
+* Struct-type values are now supported for editing, such as `ConfigAddNPCSpawnEntriesContainer`, However
+  we do not yet have metadata for these configuration items yet and their use in .INI files has not been testes.
+* Vectors of Structs are not yet supported
+
 [0.2.1] - Fix #11 - Support for vectors
 * Vector-type values, such as `mods` now have a vector editor.  The `mods` config value
   is now also converted to a vector type.
