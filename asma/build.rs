@@ -1,6 +1,11 @@
-use std::{io::Read, io::Write, path::Path};
+use std::{
+    fs::File,
+    io::Read,
+    io::{BufWriter, Write},
+    path::Path,
+};
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use chrono::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -13,8 +18,12 @@ struct DefaultConfigManifest {
     date: DateTime<Utc>,
 }
 
+enum ReleaseTarget {
+    Dev,
+    Rel
+}
+
 fn main() -> Result<()> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let out_dir = Path::new(&out_dir)
         .parent()
@@ -23,6 +32,43 @@ fn main() -> Result<()> {
         .unwrap()
         .parent()
         .unwrap();
+
+    let release_target = std::env::var("RELEASE_TARGET").unwrap_or("dev".into());
+    let release_target = match release_target.to_ascii_lowercase().as_str() {
+        "dev" => ReleaseTarget::Dev,
+        "rel" => ReleaseTarget::Rel,
+        _ =>  bail!("Invalid release target specified!")
+    };
+
+    write_default_config_manifest(out_dir);
+    write_version_json(out_dir);
+
+    EmitBuilder::builder().all_build().emit()?;
+    if let ReleaseTarget::Rel = release_target{
+        println!("cargo:rustc-env=IS_RELEASE_TARGET=true");
+    }
+    println!("cargo:rerun-if-changed=build.rs");
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct Version {
+    version: String,
+}
+
+fn write_version_json(out_dir: &Path) {
+    let version_path = out_dir.join("version.json");
+    let version = env!("CARGO_PKG_VERSION").to_owned();
+
+    serde_json::to_writer(
+        BufWriter::new(File::create(&version_path).expect("Failed to create version file")),
+        &Version { version },
+    )
+    .expect("Failed to serialize version");
+}
+
+fn write_default_config_manifest(out_dir: &Path) {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let default_config_path = Path::new(manifest_dir)
         .join("res")
         .join("data")
@@ -73,8 +119,4 @@ fn main() -> Result<()> {
         serde_json::to_string_pretty(&default_config_manifest).unwrap(),
     )
     .unwrap();
-
-    EmitBuilder::builder().all_build().emit()?;
-    println!("cargo:rerun-if-changed=build.rs");
-    Ok(())
 }

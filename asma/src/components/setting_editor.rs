@@ -1,6 +1,6 @@
 use iced::{
     widget::{
-        column, horizontal_space, pick_list, row, text, text_input, toggler, vertical_space, Row,
+        column, horizontal_space, pick_list, row, text, text_input, toggler, Row,
     },
     Alignment, Command, Element, Length, Pixels,
 };
@@ -425,6 +425,7 @@ impl SettingEditor {
             row![text(format!("No valid enumeration of type {}", enum_name))]
         }
     }
+
 
     fn make_vector_editor_for<'a>(
         &'a self,

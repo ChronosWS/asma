@@ -33,8 +33,11 @@ use crate::{
 
 mod monitor;
 
+// TODO: Should refactor this whole module - monitoring especially covers more than just servers
+
 pub use monitor::{
-    monitor_server, RconMonitorSettings, RconPlayerEntry, RconResponse, ServerMonitorCommand,
+    monitor_server, MonitorConfig, RconMonitorSettings, RconPlayerEntry, RconResponse,
+    ServerMonitorCommand,
 };
 
 #[derive(Debug, Clone)]
@@ -335,7 +338,8 @@ pub async fn update_server(
     let steamcmd_exe = Path::new(steamcmd_dir).join("steamcmd.exe");
 
     // Create the installation directory
-    std::fs::create_dir_all(installation_dir).with_context(|| "Failed to create installation directory")?;
+    std::fs::create_dir_all(installation_dir)
+        .with_context(|| "Failed to create installation directory")?;
 
     let mut args = vec![
         "+force_install_dir",

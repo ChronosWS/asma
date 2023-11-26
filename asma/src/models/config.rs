@@ -381,13 +381,13 @@ impl Display for ConfigValueType {
 }
 
 impl From<&ConfigValue> for ConfigValueType {
-    fn from(value: &ConfigValue) -> Self {
+    fn from(_value: &ConfigValue) -> Self {
         todo!()
     }
 }
 
 impl From<&ConfigVariant> for ConfigValueType {
-    fn from(value: &ConfigVariant) -> Self {
+    fn from(_value: &ConfigVariant) -> Self {
         todo!()
     }
 }

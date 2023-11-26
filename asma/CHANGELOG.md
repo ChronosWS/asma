@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.3] - Fix #30 - Self-update for ASMA
+* ASMA will now check for updates every several minutes, with option to check manually
+
 [0.2.2] - Fix #12 - Support for complex values
 * Struct-type values are now supported for editing, such as `ConfigAddNPCSpawnEntriesContainer`, However
   we do not yet have metadata for these configuration items yet and their use in .INI files has not been testes.

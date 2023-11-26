@@ -7,17 +7,19 @@ use std::{
 use anyhow::{Context, Result};
 use rcon::Connection;
 use regex::Regex;
+use reqwest::Url;
 use sysinfo::{Pid, PidExt, ProcessExt, ProcessStatus, System, SystemExt};
 use tokio::{
     sync::mpsc::{channel, error::TryRecvError, Receiver, Sender},
     task::JoinSet,
-    time::{sleep, timeout},
+    time::{sleep, timeout, Instant},
 };
 use tracing::{error, trace, warn};
 use uuid::Uuid;
 
 use crate::{
     models::{RunData, RunState},
+    update_utils::{check_for_asma_updates, update_asma, AsmaUpdateState},
     AsyncNotification,
 };
 
@@ -37,6 +39,8 @@ pub enum ServerMonitorCommand {
     KillServer {
         server_id: Uuid,
     },
+    UpdateAsma,
+    CheckForAsmaUpdates
 }
 
 #[derive(Debug, Clone)]
@@ -46,12 +50,14 @@ pub struct RconExecResponse {
 }
 
 #[derive(Debug, Clone)]
+#[allow(unused)]
 pub struct RconPlayerEntry {
     player_num: usize,
     steam_id: String,
     user_name: String,
 }
 
+#[allow(unused)]
 enum RconCommand {
     Stop,
     Exec { id: i32, command: String },
@@ -83,6 +89,11 @@ struct ServerProcessRecord {
     is_stopping: bool,
 }
 
+pub struct MonitorConfig {
+    pub app_update_url: Url,
+    pub app_update_check_seconds: u64,
+}
+
 // Special RCON queries that don't bubble up
 const EXEC_LIST_PLAYERS: i32 = -1;
 const EXEC_LIST_PLAYERS_COMMAND: &str = "ListPlayers";
@@ -92,6 +103,7 @@ const EXEC_STOP_COMMAND: &str = "DoExit";
 
 /// Watches the process stack for changes to this server's process state
 pub async fn monitor_server(
+    monitor_config: MonitorConfig,
     mut command: Receiver<ServerMonitorCommand>,
     status_sender: Sender<AsyncNotification>,
 ) -> Result<()> {
@@ -101,6 +113,7 @@ pub async fn monitor_server(
     let mut rcon_runner_tasks: JoinSet<Result<()>> = JoinSet::new();
     let mut rcon_responses = Vec::new();
     let mut player_list = Vec::<RconPlayerEntry>::new();
+    let mut last_asma_update_check = None;
     let player_list_regex = Regex::new("(?<num>[0-9]+). (?<name>[^,]+), (?<userid>[0-9a-f]+)")
         .expect("Failed to compile player list regex");
     loop {
@@ -215,6 +228,28 @@ pub async fn monitor_server(
                         }
                     }
                 }
+                Ok(ServerMonitorCommand::UpdateAsma) => {
+                    match update_asma(&status_sender, &monitor_config.app_update_url).await {
+                        Ok(_) => {
+                            let _ = status_sender
+                                .send(AsyncNotification::AsmaUpdateState(
+                                    AsmaUpdateState::UpdateReady,
+                                ))
+                                .await;
+                        }
+                        Err(e) => {
+                            warn!("ASMA update failed: {}", e.to_string());
+                            let _ = status_sender
+                                .send(AsyncNotification::AsmaUpdateState(
+                                    AsmaUpdateState::UpdateFailed,
+                                ))
+                                .await;
+                        }
+                    }
+                }
+                Ok(ServerMonitorCommand::CheckForAsmaUpdates) => {
+                    last_asma_update_check = None
+                }
                 Err(TryRecvError::Disconnected) => {
                     trace!("Closing monitor_server channel");
                     return Ok(());
@@ -224,6 +259,25 @@ pub async fn monitor_server(
                     break;
                 }
             }
+        }
+
+        // Check for ASMA updates
+        if let Some(last_checked_time) = last_asma_update_check {
+            let now = Instant::now();
+            if now - last_checked_time > Duration::from_secs(monitor_config.app_update_check_seconds) {
+                let _ = check_for_asma_updates(&status_sender, &monitor_config.app_update_url)
+                    .await
+                    .map_err(|e| {
+                        warn!("Failed to get latest ASMA version info: {}", e.to_string())
+                    });
+                last_asma_update_check = Some(now)
+            }
+        } else {
+            // First boot check
+            let _ = check_for_asma_updates(&status_sender, &monitor_config.app_update_url)
+                .await
+                .map_err(|e| warn!("Failed to get latest ASMA version info: {}", e.to_string()));
+            last_asma_update_check = Some(Instant::now())
         }
 
         // Check the status of each server now

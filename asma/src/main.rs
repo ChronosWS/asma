@@ -15,8 +15,10 @@ use iced::{
 };
 
 use models::config::ConfigEntries;
+use reqwest::Url;
 use server::{RconResponse, ServerMonitorCommand, UpdateServerProgress, ValidationResult};
 use steamcmd_utils::validate_steamcmd;
+use structopt::StructOpt;
 use sysinfo::{System, SystemExt};
 use tantivy::Index;
 use tokio::sync::mpsc::error::SendError;
@@ -36,17 +38,38 @@ mod network_utils;
 mod server;
 mod settings_utils;
 mod steamcmd_utils;
+mod update_utils;
 
 use modal::Modal;
 use models::*;
+use update_utils::AsmaUpdateState;
 use uuid::Uuid;
 
 use crate::models::config::{ConfigLocation, IniFile, IniSection};
 use crate::server::{
     monitor_server, start_server, update_inis_from_settings, update_server, validate_server,
-    RconMonitorSettings, UpdateMode,
+    MonitorConfig, RconMonitorSettings, UpdateMode,
 };
 use crate::settings_utils::save_server_settings_with_error;
+
+#[derive(StructOpt)]
+
+struct Opt {
+    #[structopt(
+        long,
+        default_value = "https://arkservermanager.s3.us-west-2.amazonaws.com/asma/release/"
+    )]
+    app_update_url: Url,
+
+    #[structopt(
+        long,
+        default_value = "900"
+    )]
+    app_update_check_seconds: u64,
+
+    #[structopt(long)]
+    do_update: bool,
+}
 
 // iced uses a pattern based on the Elm architecture. To implement the pattern, the system is split
 // into four parts:
@@ -104,6 +127,7 @@ pub enum AsyncNotification {
     AsyncStarted(Sender<AsyncNotification>),
     UpdateServerProgress(Uuid, UpdateServerProgress),
     UpdateServerRunState(Uuid, RunState),
+    AsmaUpdateState(AsmaUpdateState),
     RconResponse(Uuid, RconResponse),
 }
 
@@ -113,6 +137,8 @@ pub enum Message {
     FontLoaded(Result<String, font::Error>),
     RefreshIp(LocalIp),
     OpenAsaPatchNotes,
+    UpdateAsma,
+    CheckForAsmaUpdates,
 
     // Dialogs
     GlobalSettings(GlobalSettingsMessage),
@@ -189,9 +215,13 @@ impl Application for AppState {
     type Flags = ();
 
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+        let opt = Opt::from_args();
         for signal in System::SUPPORTED_SIGNALS {
             trace!("Supported : {:?}", signal);
         }
+
+        // TODO: Load more fonts and configure the default styles
+
         let arial_bytes = get_system_font_bytes("ARIAL.ttf").expect("Failed to find Arial");
         let global_settings = settings_utils::load_global_settings()
             .unwrap_or_else(|_| settings_utils::default_global_settings());
@@ -273,6 +303,9 @@ impl Application for AppState {
                 global_settings,
                 global_state: GlobalState {
                     app_version: env!("CARGO_PKG_VERSION").into(),
+                    app_update_url: opt.app_update_url.to_owned(),
+                    app_update_check_seconds: opt.app_update_check_seconds.max(600),
+                    app_update_state: AsmaUpdateState::CheckingForUpdates,
                     local_ip: LocalIp::Unknown,
                     edit_metadata_id: None,
                     steamcmd_state,
@@ -330,6 +363,32 @@ impl Application for AppState {
                     .spawn()
                     .map_err(|e| error!("Failed to spawn form link: {}", e.to_string()));
                 Command::none()
+            }
+            Message::UpdateAsma => {
+                trace!("UpdateAsma");
+                if let Some(command_channel) = self.monitor_command_channel.to_owned() {
+                    Command::perform(
+                        send_monitor_command(command_channel, ServerMonitorCommand::UpdateAsma),
+                        |_| Message::None,
+                    )
+                } else {
+                    Command::none()
+                }
+            }
+            Message::CheckForAsmaUpdates => {
+                trace!("CheckForAsmaUpdates");
+                if let Some(command_channel) = self.monitor_command_channel.to_owned() {
+                    self.global_state.app_update_state = AsmaUpdateState::CheckingForUpdates;
+                    Command::perform(
+                        send_monitor_command(
+                            command_channel,
+                            ServerMonitorCommand::CheckForAsmaUpdates,
+                        ),
+                        |_| Message::None,
+                    )
+                } else {
+                    Command::none()
+                }
             }
             Message::GlobalSettings(message) => global_settings::update(self, message),
             Message::ServerSettings(message) => server_settings::update(self, message),
@@ -662,7 +721,14 @@ impl Application for AppState {
                 let mut run_state_commands = Vec::new();
 
                 run_state_commands.push(Command::perform(
-                    monitor_server(monitor_recv, sender),
+                    monitor_server(
+                        MonitorConfig {
+                            app_update_url: self.global_state.app_update_url.to_owned(),
+                            app_update_check_seconds: self.global_state.app_update_check_seconds
+                        },
+                        monitor_recv,
+                        sender,
+                    ),
                     |_| Message::None,
                 ));
 
@@ -755,6 +821,15 @@ impl Application for AppState {
                 trace!("RconResponse {}: {:?}", server_id, response);
                 Command::none()
             }
+            Message::AsyncNotification(AsyncNotification::AsmaUpdateState(update_state)) => {
+                trace!("AsmaUpdateState: {:?}", update_state);
+                if let AsmaUpdateState::UpdateReady = &update_state {
+                    update_utils::restart();
+                }
+
+                self.global_state.app_update_state = update_state;
+                Command::none()
+            }
         }
     }
 
@@ -806,7 +881,7 @@ impl Application for AppState {
         };
 
         let mut main_content_children: Vec<Element<_>> = Vec::new();
-        if option_env!("IS_RELEASE_BUILD").is_none() {
+        if option_env!("IS_RELEASE_TARGET").is_none() {
             main_content_children
                 .push(
                     container(text("DEVELOPMENT BUILD - USE AT YOUR OWN RISK").size(15))
@@ -862,7 +937,14 @@ impl Application for AppState {
 fn main() -> iced::Result {
     init_tracing();
 
-    AppState::run(Settings::default())
+    let opt = Opt::from_args();
+
+    if opt.do_update {
+        update_utils::do_update();
+    } else {
+        update_utils::cleanup_update();
+        AppState::run(Settings::default())
+    }
 }
 
 fn init_tracing() {

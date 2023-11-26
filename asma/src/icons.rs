@@ -35,6 +35,9 @@ pub static LOGS: image::Handle =
 pub static REFRESH: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/Refresh.ico")).into();
 #[dynamic]
+pub static RELOAD: image::Handle =
+    image::Handle::from_memory(std::include_bytes!("../res/icons/Reload.ico")).into();
+#[dynamic]
 pub static SAVE: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/Save.ico")).into();
 #[dynamic]

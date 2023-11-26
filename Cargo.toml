@@ -3,5 +3,15 @@ resolver = "2"
 
 members = [
     "rcon",
+    "package_tool",
     "asma",
 ]
+
+[profile.release]
+# Original: 28,164,608
+
+# With opts: 17,918,464
+# strip = true
+# opt-level = "z"
+# lto = true
+# codegen-units = 1

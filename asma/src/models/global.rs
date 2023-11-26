@@ -1,4 +1,7 @@
+use reqwest::Url;
 use serde::{Serialize, Deserialize};
+
+use crate::update_utils::AsmaUpdateState;
 
 use super::{ThemeType, LocalIp};
 
@@ -32,6 +35,9 @@ pub struct GlobalSettings {
 
 pub struct GlobalState {
     pub app_version: String,
+    pub app_update_url: Url,
+    pub app_update_check_seconds: u64,
+    pub app_update_state: AsmaUpdateState,
     pub local_ip: LocalIp,
     pub edit_metadata_id: Option<usize>,
     pub steamcmd_state: SteamCmdState,
