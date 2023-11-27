@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.4] - Support nested complex structures
+* The configuration system now supports arbitrarily nested vectors and structures
+  for complex value editing
+
 [0.2.3] - Fix #30 - Self-update for ASMA
 * ASMA will now check for updates every several minutes, with option to check manually
 
