@@ -617,7 +617,7 @@ impl SettingEditor {
                     is_vector_entry,
                     row![
                         horizontal_space(Pixels(25.0 * (segment_count.saturating_sub(1)) as f32)),
-                        text(field_name).width(if segment_count > 0 { 100 } else { 0 })
+                        text(&field_name).width(Pixels(if segment_count > 0 { (field_name.len() * 10) as f32 } else { 0f32 }))
                     ]
                     .align_items(Alignment::Center),
                 )
@@ -671,7 +671,7 @@ impl SettingEditor {
                 }
                 (_, EditorValue::EndOfVectorMarker) => {
                     row![make_button(
-                        "Add Row",
+                        "Add",
                         Some(f(SettingEditorMessage::Edit(
                             editor_config.path.to_owned(),
                             SettingChange::VectorChange(VectorChange::Add(
@@ -687,7 +687,7 @@ impl SettingEditor {
             let vector_controls = if is_vector_entry {
                 row![
                     make_button(
-                        "Move Up",
+                        "",
                         Some(f(SettingEditorMessage::Edit(
                             editor_config.path.to_owned(),
                             SettingChange::VectorChange(VectorChange::MoveUp)
@@ -695,7 +695,7 @@ impl SettingEditor {
                         icons::UP.clone()
                     ),
                     make_button(
-                        "Move Down",
+                        "",
                         Some(f(SettingEditorMessage::Edit(
                             editor_config.path.to_owned(),
                             SettingChange::VectorChange(VectorChange::MoveDown)
@@ -703,7 +703,7 @@ impl SettingEditor {
                         icons::DOWN.clone()
                     ),
                     make_button(
-                        "Remove",
+                        "",
                         Some(f(SettingEditorMessage::Edit(
                             editor_config.path.to_owned(),
                             SettingChange::VectorChange(VectorChange::Remove)

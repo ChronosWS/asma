@@ -128,10 +128,42 @@ impl Display for ConfigValue {
             Self::String(v) => write!(f, "{}", v),
             Self::Enum { value, .. } => write!(f, "{}", value),
             Self::Struct(fields) => {
-                writeln!(f, "Struct")?;
+                write!(f, "(")?;
+                let mut is_first_field = true;
                 for field in fields.iter() {
-                    writeln!(f, "  {} = {}", field.name, field.value)?;
+                    if is_first_field {
+                        is_first_field = false;
+                    } else {
+                        write!(f, ",")?;
+                    }
+                    match &field.value {
+                        ConfigVariant::Scalar(ConfigValue::Enum { value, .. }) => {
+                            write!(f, r#"{}="{}""#, field.name, value)?
+                        }
+                        ConfigVariant::Scalar(ConfigValue::String(value)) => {
+                            write!(f, r#"{}="{}""#, field.name, value)?
+                        }
+                        ConfigVariant::Vector(values) => {
+                            write!(f, "{}=(", field.name)?;
+                            let mut is_first_value = true;
+                            for value in values.iter() {
+                                if is_first_value {
+                                    is_first_value = false;
+                                } else {
+                                    write!(f, ",")?;
+                                }
+                                match value {
+                                    ConfigValue::String(value) => write!(f, r#""{}""#, value)?,
+                                    ConfigValue::Enum { value, .. } => write!(f, r#""{}""#, value)?,
+                                    value => write!(f, "{}", value)?,
+                                }
+                            }
+                            write!(f, ")")?;
+                        }
+                        value => write!(f, "{}={}", field.name, value)?,
+                    }
                 }
+                write!(f, ")")?;
                 Ok(())
             }
         }
@@ -270,11 +302,11 @@ pub enum ConfigValueBaseType {
 
 impl Display for ConfigValueBaseType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Self::Struct(fields) = self {
-            writeln!(f, "Struct")?;
-            for field in fields.iter() {
-                writeln!(f, "  {}", field)?;
-            }
+        if let Self::Struct(_fields) = self {
+            write!(f, "Struct")?;
+            // for field in fields.iter() {
+            //     writeln!(f, "  {}", field)?;
+            // }
             Ok(())
         } else {
             write!(
