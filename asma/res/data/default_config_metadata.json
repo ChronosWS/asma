@@ -600,7 +600,7 @@
             "description": "Allows server custom notification broadcast using the server message feature. Used in official clusters (e.g.: http://arkdedicated.com/pcnotification.html). Undocumented bye Wildcard.",
             "value_type": {
                 "quantity": "Scalar",
-                "base_type": "Bool"
+                "base_type": "String"
             },
             "default_value": {
                 "Scalar": {

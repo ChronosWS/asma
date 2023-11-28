@@ -1,5 +1,7 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.7] - Fix metadata for CustomNotificationUrl
+
 [0.2.6] - Add Logo and icon, change default window size
 * Thanks @SteveLastics for the art
 
