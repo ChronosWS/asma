@@ -2,6 +2,9 @@ use iced::widget::image;
 use static_init::dynamic;
 
 #[dynamic]
+pub static LOGO: image::Handle =
+    image::Handle::from_memory(std::include_bytes!("../res/icons/logo.png")).into();
+#[dynamic]
 pub static ASMA_STEVE: image::Handle =
     image::Handle::from_memory(std::include_bytes!("../res/icons/ASMA_SteveLastics.png")).into();
 #[dynamic]

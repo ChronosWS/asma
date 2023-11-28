@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.6] - Add Logo and icon, change default window size
+* Thanks @SteveLastics for the art
+
 [0.2.5] - UI cleanup and INI support for structures
 * Cleaned up the UI a little for the editor
 * Made structs serialize the INI files correctly

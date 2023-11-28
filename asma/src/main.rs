@@ -61,10 +61,7 @@ struct Opt {
     )]
     app_update_url: Url,
 
-    #[structopt(
-        long,
-        default_value = "900"
-    )]
+    #[structopt(long, default_value = "900")]
     app_update_check_seconds: u64,
 
     #[structopt(long)]
@@ -724,7 +721,7 @@ impl Application for AppState {
                     monitor_server(
                         MonitorConfig {
                             app_update_url: self.global_state.app_update_url.to_owned(),
-                            app_update_check_seconds: self.global_state.app_update_check_seconds
+                            app_update_check_seconds: self.global_state.app_update_check_seconds,
                         },
                         monitor_recv,
                         sender,
@@ -943,7 +940,16 @@ fn main() -> iced::Result {
         update_utils::do_update();
     } else {
         update_utils::cleanup_update();
-        AppState::run(Settings::default())
+        let mut settings = Settings::default();
+        settings.window.size = (1536, 1280);
+        settings.window.icon = Some(
+            iced::window::icon::from_file_data(
+                std::include_bytes!("../res/icons/ASMA_SteveLastics.png"),
+                Some(iced::advanced::graphics::image::image_rs::ImageFormat::Png),
+            )
+            .expect("Failed to load icon"),
+        );
+        AppState::run(settings)
     }
 }
 

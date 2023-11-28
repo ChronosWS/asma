@@ -1,5 +1,5 @@
 use iced::{
-    widget::{column, container, horizontal_space, row, text, Row},
+    widget::{column, container, horizontal_space, row, text, Row, image},
     Alignment, Length,
 };
 
@@ -16,9 +16,7 @@ use super::make_button;
 pub fn main_header(global_state: &GlobalState) -> Row<Message> {
     row![
         column![
-            text("ASM: Ascended")
-                .size(40)
-                .vertical_alignment(iced::alignment::Vertical::Top),
+            image::Image::new(icons::LOGO.clone()).width(300).height(100),
             row![
                 make_button(
                     "Global Settings...",
