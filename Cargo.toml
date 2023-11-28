@@ -2,7 +2,6 @@
 resolver = "2"
 
 members = [
-    "rcon",
     "package_tool",
     "asma",
 ]
