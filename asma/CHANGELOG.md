@@ -1,5 +1,7 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.10] - Fix bug in updater trying to copy to itself
+
 [0.2.9] - Compatibility Versions and improved installer
 * There is now a version for Win 2016 that doesn't use the newer console APIs.  This means
   you won't get to see incremental installation progress, but ASMA will otherwise work as

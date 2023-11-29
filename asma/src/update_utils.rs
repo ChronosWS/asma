@@ -136,9 +136,10 @@ pub fn restart() -> ! {
 }
 
 pub fn do_update() -> ! {
-    let asma_exe_path = process_path::get_executable_path().expect("Failed to get process path");
-    let mut asma_new_exe_path = asma_exe_path.clone();
-    asma_new_exe_path.set_file_name("asma.new.exe");
+    // At this point we are running as `asma.new.exe`
+    let asma_new_exe_path = process_path::get_executable_path().expect("Failed to get process path");
+    let mut asma_exe_path = asma_new_exe_path.clone();
+    asma_exe_path.set_file_name("asma.exe");
 
     loop {
         let mut iterations = 10usize;
