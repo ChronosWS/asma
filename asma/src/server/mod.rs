@@ -8,7 +8,6 @@ use std::{
     fs::File,
     io::{ErrorKind, Read},
     path::{Path, PathBuf},
-    time::Duration,
 };
 use tokio::{process::Command, sync::mpsc::Sender};
 
@@ -321,144 +320,273 @@ pub async fn start_server(
     Ok(())
 }
 
-pub async fn update_server(
-    server_id: Uuid,
-    steamcmd_dir: impl AsRef<str>,
-    installation_dir: impl AsRef<str>,
-    app_id: impl AsRef<str>,
-    mode: UpdateMode,
-    progress: Sender<AsyncNotification>,
-) -> Result<()> {
-    let steamcmd_dir = steamcmd_dir.as_ref().to_owned();
-    let installation_dir = installation_dir.as_ref().to_owned();
-    let app_id = app_id.as_ref().to_owned();
-    let handle = tokio::task::spawn_blocking(move || {
-        update_server_thread(
-            server_id,
-            steamcmd_dir,
-            installation_dir,
-            app_id,
-            mode,
-            progress,
+#[cfg(not(feature = "conpty"))]
+pub mod os {
+    use std::{path::Path, process::Stdio};
+
+    use anyhow::{Context, Result};
+    use regex::Regex;
+    use tokio::{sync::mpsc::Sender, process::{ChildStdout, Command}, io::{BufReader, AsyncBufReadExt}};
+    use tracing::{trace, error};
+    use uuid::Uuid;
+
+    use crate::{server::{UpdateServerProgress, process_steamcmd_line}, AsyncNotification};
+
+    use super::UpdateMode;
+
+    pub async fn update_server(
+        server_id: Uuid,
+        steamcmd_dir: impl AsRef<str>,
+        installation_dir: impl AsRef<str>,
+        app_id: impl AsRef<str>,
+        mode: UpdateMode,
+        progress: Sender<AsyncNotification>,
+    ) -> Result<()> {
+        let steamcmd_dir = steamcmd_dir.as_ref();
+        let installation_dir = installation_dir.as_ref();
+
+        let steamcmd_exe = Path::new(&steamcmd_dir).join("steamcmd.exe");
+
+        // Create the installation directory
+        std::fs::create_dir_all(&installation_dir)
+            .with_context(|| "Failed to create installation directory")?;
+
+        let mut args = vec![
+            "+force_install_dir",
+            &installation_dir,
+            "+login",
+            "anonymous",
+        ];
+
+        match mode {
+            UpdateMode::Update => {
+                args.push("+app_update");
+                args.push(app_id.as_ref())
+            }
+            UpdateMode::Validate => {
+                args.push("validate");
+            }
+        }
+
+        args.push("+quit");
+
+        trace!("SteamCMD: {} {}", steamcmd_exe.display(), args.join(" "));
+        let mut command = Command::new(steamcmd_exe);
+
+        command.args(args);
+        command.stdout(Stdio::piped());
+
+        let mut child = command.spawn()?;
+        let stdout: ChildStdout = child.stdout.take().expect("Failed to get piped stdout");
+
+        let progress_parser = Regex::new(
+            r"Update state \(0x(?<state>[0-9a-fA-F]+)\) (?<desc>[^,]*), progress: (?<percent>[0-9.]+)",
         )
-    });
-    handle.await?
-}
+        .expect("Failed to compile progress regex");
 
-pub fn update_server_thread(
-    server_id: Uuid,
-    steamcmd_dir: String,
-    installation_dir: String,
-    app_id: String,
-    mode: UpdateMode,
-    progress: Sender<AsyncNotification>,
-) -> Result<()> {
-    let steamcmd_exe = Path::new(&steamcmd_dir).join("steamcmd.exe");
+        let line_reader = BufReader::new(stdout);
+        let mut lines = line_reader.lines();
 
-    // Create the installation directory
-    std::fs::create_dir_all(&installation_dir)
-        .with_context(|| "Failed to create installation directory")?;
+        let _ = progress
+            .send(AsyncNotification::UpdateServerProgress(
+                server_id,
+                UpdateServerProgress::Initializing,
+            ))
+            .await;
+        //Update state (0x61) downloading, progress: 99.76 (9475446175 / 9498529183)
+        //Update state (0x81) verifying update, progress: 7.18 (681966749 / 9498529183)
 
-    let mut args = vec![
-        "+force_install_dir",
-        &installation_dir,
-        "+login",
-        "anonymous",
-    ];
+        // HACK: SteamCMD is an ill-behaved piece of software which makes it difficult to grab progress line-by-line.
+        // See: https://github.com/ValveSoftware/Source-1-Games/issues/1684
 
-    match mode {
-        UpdateMode::Update => {
-            args.push("+app_update");
-            args.push(app_id.as_ref())
-        }
-        UpdateMode::Validate => {
-            args.push("validate");
-        }
-    }
-
-    args.push("+quit");
-
-    run_steamcmd_conpty(server_id, steamcmd_exe, &args, progress)
-}
-
-fn run_steamcmd_conpty(
-    server_id: Uuid,
-    steamcmd_exe: PathBuf,
-    args: &[&str],
-    progress: Sender<AsyncNotification>,
-) -> Result<()> {
-    trace!("SteamCMD: {} {}", steamcmd_exe.display(), args.join(" "));
-
-    let command_line = format!(
-        "{} {}",
-        steamcmd_exe.to_str().to_owned().unwrap(),
-        args.join(" ")
-    );
-
-    let _ = progress.blocking_send(AsyncNotification::UpdateServerProgress(
-        server_id,
-        UpdateServerProgress::Initializing,
-    ));
-
-    let mut process =
-        conpty::spawn(&command_line).expect(&format!("Failed to spawn {}", command_line));
-
-    let mut output = process.output().expect("Failed to get output pipe");
-    output.blocking(false);
-
-    trace!("SteamCMD: Starting read");
-    let mut buf = vec![0u8; 64];
-    let mut line_buf = String::new();
-    loop {
-        match output.read(&mut buf) {
-            Ok(bytes_read) => {
-                if bytes_read > 0 {
-                    let buf_as_str = std::str::from_utf8(&buf[0..bytes_read]).unwrap();
-                    if let Some(index) = buf_as_str.find("\r") {
-                        // Push the rest of this line
-                        line_buf.push_str(&buf_as_str[0..index]);
-                        process_steamcmd_line(server_id, line_buf.trim(), &progress);
-                        // Start a new line
-                        line_buf.clear();
-                        line_buf.push_str(&buf_as_str[index..]);
-                    } else {
-                        // Add to the current line
-                        line_buf.push_str(buf_as_str);
-                    }
-                } else if !process.is_alive() {
-                    trace!("Process exited.");
+        loop {
+            match lines.next_line().await {
+                Ok(Some(line)) => {
+                    process_steamcmd_line(server_id, line.trim(), &progress_parser, &progress);
+                }
+                Ok(None) => {
                     break;
-                } else {
-                    trace!("Waiting...");
-                    std::thread::sleep(Duration::from_millis(500));
+                }
+                Err(e) => {
+                    error!(
+                        "{}: SteamCMD: Error reading output: {}",
+                        server_id,
+                        e.to_string()
+                    );
+                    break;
                 }
             }
-            Err(e) => {
-                if e.kind() == ErrorKind::WouldBlock {
-                    if !process.is_alive() {
-                        trace!("Process exited while waiting");
+        }
+
+        child
+            .wait()
+            .await
+            .map(|_| ())
+            .with_context(|| "steam_cmd failed")
+    }
+}
+
+#[cfg(feature = "conpty")]
+pub mod os {
+    use std::{
+        io::{ErrorKind, Read},
+        path::{Path, PathBuf},
+        time::Duration,
+    };
+
+    use anyhow::{Context, Result};
+    use regex::Regex;
+    use tokio::sync::mpsc::Sender;
+    use tracing::trace;
+    use uuid::Uuid;
+
+    use crate::{
+        server::{process_steamcmd_line, UpdateServerProgress},
+        AsyncNotification,
+    };
+
+    use super::UpdateMode;
+
+    pub async fn update_server(
+        server_id: Uuid,
+        steamcmd_dir: impl AsRef<str>,
+        installation_dir: impl AsRef<str>,
+        app_id: impl AsRef<str>,
+        mode: UpdateMode,
+        progress: Sender<AsyncNotification>,
+    ) -> Result<()> {
+        let steamcmd_dir = steamcmd_dir.as_ref().to_owned();
+        let installation_dir = installation_dir.as_ref().to_owned();
+        let app_id = app_id.as_ref().to_owned();
+        let handle = tokio::task::spawn_blocking(move || {
+            update_server_thread(
+                server_id,
+                steamcmd_dir,
+                installation_dir,
+                app_id,
+                mode,
+                progress,
+            )
+        });
+        handle.await?
+    }
+
+    fn update_server_thread(
+        server_id: Uuid,
+        steamcmd_dir: String,
+        installation_dir: String,
+        app_id: String,
+        mode: UpdateMode,
+        progress: Sender<AsyncNotification>,
+    ) -> Result<()> {
+        let steamcmd_exe = Path::new(&steamcmd_dir).join("steamcmd.exe");
+
+        // Create the installation directory
+        std::fs::create_dir_all(&installation_dir)
+            .with_context(|| "Failed to create installation directory")?;
+
+        let mut args = vec![
+            "+force_install_dir",
+            &installation_dir,
+            "+login",
+            "anonymous",
+        ];
+
+        match mode {
+            UpdateMode::Update => {
+                args.push("+app_update");
+                args.push(app_id.as_ref())
+            }
+            UpdateMode::Validate => {
+                args.push("validate");
+            }
+        }
+
+        args.push("+quit");
+
+        run_steamcmd_conpty(server_id, steamcmd_exe, &args, progress)
+    }
+
+    fn run_steamcmd_conpty(
+        server_id: Uuid,
+        steamcmd_exe: PathBuf,
+        args: &[&str],
+        progress: Sender<AsyncNotification>,
+    ) -> Result<()> {
+        trace!("SteamCMD: {} {}", steamcmd_exe.display(), args.join(" "));
+
+        let command_line = format!(
+            "{} {}",
+            steamcmd_exe.to_str().to_owned().unwrap(),
+            args.join(" ")
+        );
+
+        let progress_parser = Regex::new(
+            r"Update state \(0x(?<state>[0-9a-fA-F]+)\) (?<desc>[^,]*), progress: (?<percent>[0-9.]+)",
+        )
+        .expect("Failed to compile progress regex");
+
+        let _ = progress.blocking_send(AsyncNotification::UpdateServerProgress(
+            server_id,
+            UpdateServerProgress::Initializing,
+        ));
+
+        let mut process =
+            conpty::spawn(&command_line).expect(&format!("Failed to spawn {}", command_line));
+
+        let mut output = process.output().expect("Failed to get output pipe");
+        output.blocking(false);
+
+        trace!("SteamCMD: Starting read");
+        let mut buf = vec![0u8; 64];
+        let mut line_buf = String::new();
+        loop {
+            match output.read(&mut buf) {
+                Ok(bytes_read) => {
+                    if bytes_read > 0 {
+                        let buf_as_str = std::str::from_utf8(&buf[0..bytes_read]).unwrap();
+                        if let Some(index) = buf_as_str.find("\r") {
+                            // Push the rest of this line
+                            line_buf.push_str(&buf_as_str[0..index]);
+                            process_steamcmd_line(server_id, line_buf.trim(), &progress_parser, &progress);
+                            // Start a new line
+                            line_buf.clear();
+                            line_buf.push_str(&buf_as_str[index..]);
+                        } else {
+                            // Add to the current line
+                            line_buf.push_str(buf_as_str);
+                        }
+                    } else if !process.is_alive() {
+                        trace!("Process exited.");
                         break;
                     } else {
+                        trace!("Waiting...");
                         std::thread::sleep(Duration::from_millis(500));
                     }
-                } else {
-                    trace!("Error reading from pipe: {:?}", e);
-                    break;
+                }
+                Err(e) => {
+                    if e.kind() == ErrorKind::WouldBlock {
+                        if !process.is_alive() {
+                            trace!("Process exited while waiting");
+                            break;
+                        } else {
+                            std::thread::sleep(Duration::from_millis(500));
+                        }
+                    } else {
+                        trace!("Error reading from pipe: {:?}", e);
+                        break;
+                    }
                 }
             }
         }
-    }
 
-    trace!("Update finished");
-    Ok(())
+        trace!("Update finished");
+        Ok(())
+    }
 }
 
-fn process_steamcmd_line(server_id: Uuid, line: &str, progress: &Sender<AsyncNotification>) {
-    let progress_parser = Regex::new(
-        r"Update state \(0x(?<state>[0-9a-fA-F]+)\) (?<desc>[^,]*), progress: (?<percent>[0-9.]+)",
-    )
-    .expect("Failed to compile progress regex");
-    //trace!("Looking at line: [{}]", line);
+fn process_steamcmd_line(server_id: Uuid, line: &str, progress_parser: &Regex, progress: &Sender<AsyncNotification>) {
+    
     if let Some(captures) = progress_parser.captures(&line) {
         if captures.len() == 4 {
             let state = captures.name("state").expect("Failed to get state");

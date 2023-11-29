@@ -28,6 +28,9 @@ arg_enum! {
 #[derive(StructOpt)]
 #[structopt()]
 struct Opt {
+    #[structopt(long, default_value = "")]
+    target_platform: String,
+
     #[structopt(long)]
     release_target: ReleaseTarget,
 
@@ -48,7 +51,12 @@ struct Version {
 
 fn main() -> Result<()> {
     let opt = Opt::from_args();
-    let mut path = PathBuf::from("target");
+    let target_path = if opt.target_platform.is_empty() {
+        "target".to_owned()
+    } else {
+        format!("target.{}", opt.target_platform)
+    };
+    let mut path = PathBuf::from(target_path);
     match opt.build_target {
         BuildTarget::Debug => path.push("debug"),
         BuildTarget::Release => path.push("release"),
@@ -58,6 +66,7 @@ fn main() -> Result<()> {
     let (version_path, version) = get_version(&path).with_context(|| "Failed to get version")?;
     println!("Build Target: {}", opt.build_target);
     println!("Release Target: {}", opt.release_target);
+    println!("Target Platform: {}", opt.target_platform);
     println!("Version: {}", version.version);
 
     let asma_zip_path = zip_asma(&path).with_context(|| "Failed to zip asma")?;
@@ -66,6 +75,7 @@ fn main() -> Result<()> {
 
     upload_to_s3(
         opt.release_target,
+        opt.target_platform,
         version,
         &opt.aws_path,
         &opt.aws_profile,
@@ -78,24 +88,33 @@ fn main() -> Result<()> {
 
 fn upload_to_s3(
     target: ReleaseTarget,
+    target_platform: String,
     version: Version,
     aws_path: &Url,
     aws_profile: &str,
     version_path: &PathBuf,
     asma_zip_path: &PathBuf,
 ) -> Result<()> {
+    let target_platform = if target_platform.is_empty() {
+        target_platform
+    } else {
+        format!(".{}", target_platform)
+    };
+
     let asma_zip_url = aws_path
         .join(&format!(
-            "latest-{}.zip",
-            target.to_string().to_ascii_lowercase()
+            "latest-{}{}.zip",
+            target.to_string().to_ascii_lowercase(),
+            target_platform
         ))
         .expect("Failed to create asma_zip_url");
 
     let asma_versioned_zip_url = aws_path
         .join(&format!(
-            "{}-{}.zip",
+            "{}-{}{}.zip",
             version.version,
-            target.to_string().to_ascii_lowercase()
+            target.to_string().to_ascii_lowercase(),
+            target_platform
         ))
         .expect("Failed to create asma_zip_url");
 
@@ -130,8 +149,9 @@ fn upload_to_s3(
 
     let version_json_url = aws_path
         .join(&format!(
-            "latest-{}.json",
-            target.to_string().to_ascii_lowercase()
+            "latest-{}{}.json",
+            target.to_string().to_ascii_lowercase(),
+            target_platform
         ))
         .expect("Failed to create version url");
 
@@ -200,9 +220,7 @@ fn zip_asma(path: &PathBuf) -> Result<PathBuf> {
     let options = FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
         .unix_permissions(0o755);
-    zip_writer
-        .start_file("asma.exe", options)
-        .unwrap();
+    zip_writer.start_file("asma.exe", options).unwrap();
     zip_writer.write_all(&asma_exe_bytes).unwrap();
     zip_writer.finish().unwrap();
 

@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use reqwest::Url;
+use rfd::MessageDialogResult;
 use serde::Deserialize;
 use std::io::{Read, Write};
 use tokio::sync::mpsc::Sender;
@@ -24,6 +25,22 @@ pub enum AsmaUpdateState {
     UpdateFailed,
 }
 
+#[cfg(feature = "win2016")]
+mod release_files {
+    pub const LATEST_REL_VERSION: &str = "latest-rel.win2016.json";
+    pub const LATEST_DEV_VERSION: &str = "latest-dev.win2016.json";
+    pub const LATEST_REL_ZIP: &str = "latest-rel.win2016.zip";
+    pub const LATEST_DEV_ZIP: &str = "latest-dev.win2016.zip";
+}
+
+#[cfg(not(feature = "win2016"))]
+mod release_files {
+    pub const LATEST_REL_VERSION: &str = "latest-rel.json";
+    pub const LATEST_DEV_VERSION: &str = "latest-dev.json";
+    pub const LATEST_REL_ZIP: &str = "latest-rel.json";
+    pub const LATEST_DEV_ZIP: &str = "latest-dev.json";
+}
+
 pub async fn update_asma(
     status_sender: &Sender<AsyncNotification>,
     app_update_url: &Url,
@@ -37,8 +54,8 @@ pub async fn update_asma(
     let url = app_update_url
         .join(
             option_env!("IS_RELEASE_TARGET")
-                .and(Some("latest-rel.zip"))
-                .unwrap_or("latest-dev.zip"),
+                .and(Some(release_files::LATEST_REL_ZIP))
+                .unwrap_or(release_files::LATEST_DEV_ZIP),
         )
         .with_context(|| "Failed to parse update url")?;
 
@@ -87,8 +104,8 @@ pub async fn check_for_asma_updates(
     let url = app_update_url
         .join(
             option_env!("IS_RELEASE_TARGET")
-                .and(Some("latest-rel.json"))
-                .unwrap_or("latest-dev.json"),
+                .and(Some(release_files::LATEST_REL_VERSION))
+                .unwrap_or(release_files::LATEST_DEV_VERSION),
         )
         .with_context(|| "Failed to parse update url")?;
     let version_response = reqwest::get(url)
@@ -123,20 +140,58 @@ pub fn do_update() -> ! {
     let mut asma_new_exe_path = asma_exe_path.clone();
     asma_new_exe_path.set_file_name("asma.new.exe");
 
-    let mut iterations = 10usize;
-    while iterations > 0 && std::fs::copy(&asma_new_exe_path, &asma_exe_path).is_err() {
-        sleep(std::time::Duration::from_secs(2));
-        iterations -= 1;
-    }
+    loop {
+        let mut iterations = 10usize;
+        while iterations > 0 {
+            if let Err(e) = std::fs::copy(&asma_new_exe_path, &asma_exe_path) {
+                warn!(
+                    "Couldn't copy {} to {}: {}",
+                    asma_new_exe_path.display(),
+                    asma_exe_path.display(),
+                    e.to_string()
+                );
+                sleep(std::time::Duration::from_secs(2));
+                iterations -= 1;
+            } else {
+                break;
+            }
+        }
 
-    if iterations > 0 {
-        Command::new(&asma_exe_path)
-            .spawn()
-            .expect("Failed to respawn ASMA.exe");
-        exit(0);
-    } else {
-        error!("Failed to copy asma.exe");
-        exit(-1);
+        if iterations > 0 {
+            if let Err(e) = Command::new(&asma_exe_path).spawn() {
+                rfd::MessageDialog::new()
+                    .set_title("Failed to restart ASMA")
+                    .set_description(format!(
+                        "Failed to restart {}: {}. Check the path restart it (also report this issue).",
+                        asma_exe_path.display(), 
+                        e.to_string()
+                    ))
+                    .set_level(rfd::MessageLevel::Warning)
+                    .set_buttons(rfd::MessageButtons::Ok)
+                    .show();
+                exit(-1);
+            } else {
+                exit(0);
+            }
+        } else {
+            error!("Failed to copy asma.exe");
+            let result = rfd::MessageDialog::new()
+                .set_title("Self-update failed!")
+                .set_description(
+                format!("Could not copy {} to {}.  Check that asma.exe has shut down and that {} is a writeable path. Retry?",
+                    asma_new_exe_path.display(),
+                    asma_exe_path.display(),
+                    asma_exe_path.display()))
+                .set_buttons(rfd::MessageButtons::YesNo)
+                .set_level(rfd::MessageLevel::Error)
+                .show();
+
+            if let MessageDialogResult::Yes = result {
+                continue;
+            } else {
+                exit(-1);
+            }
+        }
     }
 }
 
@@ -151,7 +206,7 @@ pub fn cleanup_update() {
             if let ErrorKind::NotFound = e.kind() {
                 trace!("No {} found to clean up", asma_new_exe_path.display());
                 return;
-            } 
+            }
         } else {
             trace!("Cleaned up {}", asma_new_exe_path.display());
             return;

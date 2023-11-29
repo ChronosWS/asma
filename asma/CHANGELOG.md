@@ -1,5 +1,13 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.9] - Compatibility Versions and improved installer
+* There is now a version for Win 2016 that doesn't use the newer console APIs.  This means
+  you won't get to see incremental installation progress, but ASMA will otherwise work as
+  normal.
+* Server 2016 versions are at [latest-dev.win2016.zip](https://arkservermanager.s3.us-west-2.amazonaws.com/asma/release/latest-dev.win2016.zip)
+* Other versions remain at [latest-dev.zip](https://arkservermanager.s3.us-west-2.amazonaws.com/asma/release/latest-devzip)
+* If update fails, you will now get a dialog box suggesting how to fix it.
+
 [0.2.8] - Improved installation experience
 * Can now cancel creation of a new server
 * Can't leave the server create without setting installation directory

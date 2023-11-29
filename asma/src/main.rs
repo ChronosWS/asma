@@ -47,8 +47,8 @@ use uuid::Uuid;
 
 use crate::models::config::{ConfigLocation, IniFile, IniSection};
 use crate::server::{
-    monitor_server, start_server, update_inis_from_settings, update_server, validate_server,
-    MonitorConfig, RconMonitorSettings, UpdateMode,
+    monitor_server, start_server, update_inis_from_settings, validate_server,
+    MonitorConfig, RconMonitorSettings, UpdateMode, os::update_server
 };
 use crate::settings_utils::save_server_settings_with_error;
 
@@ -967,7 +967,7 @@ fn init_tracing() {
     //     .finish();
 
     let stdout_log = tracing_subscriber::fmt::layer()
-        .with_ansi(true)
+        .with_ansi(false)
         .with_filter(LevelFilter::TRACE)
         .with_filter(env_filter)
         .boxed();

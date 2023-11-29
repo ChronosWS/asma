@@ -1,6 +1,8 @@
 # Ark Server Manager: Ascended
 
-**Latest Development Build**: [Dev Build](https://arkservermanager.s3.us-west-2.amazonaws.com/asma/release/latest-dev.zip)
+**Latest Development Build**: 
+* [Dev Build for Windows 10 and Server 2019 and later](https://arkservermanager.s3.us-west-2.amazonaws.com/asma/release/latest-dev.zip)
+* [Dev Build for Server 2016 and earlier](https://arkservermanager.s3.us-west-2.amazonaws.com/asma/release/latest-dev.win2016.zip)
 > Development builds are not recommended for use by non-developers. They may be quite broken and could lead to data corruption.
 
 **Latest Release**: *No builds available yet*
