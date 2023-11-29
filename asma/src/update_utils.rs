@@ -2,7 +2,7 @@ use std::{
     fs::File,
     io::{Cursor, ErrorKind},
     process::{exit, Command},
-    thread::sleep,
+    thread::sleep, fmt::Display,
 };
 
 use anyhow::{Context, Result};
@@ -19,7 +19,7 @@ use crate::AsyncNotification;
 #[derive(Debug, Clone)]
 pub enum AsmaUpdateState {
     CheckingForUpdates,
-    AvailableVersion(String),
+    AvailableVersion(AsmaVersion),
     Downloading,
     UpdateReady,
     UpdateFailed,
@@ -96,6 +96,50 @@ pub async fn update_asma(
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+pub struct AsmaVersion {
+    major: u16,
+    minor: u16,
+    revision: u16
+}
+
+impl AsmaVersion {
+    pub fn new(version_string: &str) -> Self {
+        let mut splits = version_string.split('.');
+        Self {
+            major: splits.next().unwrap_or_default().parse().unwrap_or_default(),
+            minor: splits.next().unwrap_or_default().parse().unwrap_or_default(),
+            revision: splits.next().unwrap_or_default().parse().unwrap_or_default(),
+        }
+    }
+}
+
+impl Display for AsmaVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.revision)
+    }
+}
+
+impl PartialEq for AsmaVersion {
+    fn eq(&self, other: &Self) -> bool {
+        self.major == other.major && self.minor == other.minor && self.revision == other.revision
+    }
+}
+
+impl PartialOrd for AsmaVersion {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.major.partial_cmp(&other.major) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.minor.partial_cmp(&other.minor) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.revision.partial_cmp(&other.revision)
+    }
+}
+
 pub async fn check_for_asma_updates(
     status_sender: &Sender<AsyncNotification>,
     app_update_url: &Url,
@@ -124,7 +168,7 @@ pub async fn check_for_asma_updates(
 
     let _ = status_sender
         .send(AsyncNotification::AsmaUpdateState(
-            AsmaUpdateState::AvailableVersion(version.version),
+            AsmaUpdateState::AvailableVersion(AsmaVersion::new(&version.version)),
         ))
         .await;
     Ok(())

@@ -42,7 +42,7 @@ mod update_utils;
 
 use modal::Modal;
 use models::*;
-use update_utils::AsmaUpdateState;
+use update_utils::{AsmaUpdateState, AsmaVersion};
 use uuid::Uuid;
 
 use crate::models::config::{ConfigLocation, IniFile, IniSection};
@@ -299,7 +299,7 @@ impl Application for AppState {
                 server_sender_channel: None,
                 global_settings,
                 global_state: GlobalState {
-                    app_version: env!("CARGO_PKG_VERSION").into(),
+                    app_version: AsmaVersion::new(env!("CARGO_PKG_VERSION")),
                     app_update_url: opt.app_update_url.to_owned(),
                     app_update_check_seconds: opt.app_update_check_seconds.max(600),
                     app_update_state: AsmaUpdateState::CheckingForUpdates,

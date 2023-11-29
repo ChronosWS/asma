@@ -1,5 +1,7 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.11] - Fix bug in version checking
+
 [0.2.10] - Fix bug in updater trying to copy to itself
 
 [0.2.9] - Compatibility Versions and improved installer
