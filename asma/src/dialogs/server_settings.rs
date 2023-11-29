@@ -1,3 +1,4 @@
+
 use iced::{
     alignment::Vertical,
     theme,
@@ -42,7 +43,7 @@ pub struct ServerSettingsContext {
 
 #[derive(Debug, Clone)]
 pub enum ServerSettingsMessage {
-    CloseServerSettings,
+    CloseServerSettings(bool),
     ForgetServer,
     DeleteServer,
     ServerSetName(String),
@@ -93,10 +94,14 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                 }
                 Command::none()
             }
-            ServerSettingsMessage::CloseServerSettings => {
-                if let Some(server) = app_state.servers.get(server_id) {
-                    save_server_settings_with_error(&app_state.global_settings, &server.settings);
-                }
+            ServerSettingsMessage::CloseServerSettings(save) => {
+                    if let Some(server) = app_state.servers.get(server_id) {
+                        if save {
+                            save_server_settings_with_error(&app_state.global_settings, &server.settings);
+                        } else if server.settings.installation_location.is_empty() {
+                            app_state.servers.remove(server_id);
+                        }
+                    }
                 app_state.mode = MainWindowMode::Servers;
                 Command::none()
             }
@@ -713,8 +718,13 @@ pub(crate) fn make_dialog<'a>(
                     icons::DELETE.clone()
                 ),
                 make_button(
+                    "Cancel",
+                    Some(ServerSettingsMessage::CloseServerSettings(false).into()),
+                    icons::DELETE.clone()
+                ),
+                make_button(
                     "",
-                    is_not_editing.then_some(ServerSettingsMessage::CloseServerSettings.into()),
+                    (is_not_editing && !server_settings.installation_location.is_empty()).then_some(ServerSettingsMessage::CloseServerSettings(true).into()),
                     icons::SAVE.clone()
                 )
             ]
@@ -743,7 +753,7 @@ pub(crate) fn make_dialog<'a>(
                 horizontal_space(Length::Fill),
                 make_button(
                     "Open...",
-                    is_not_editing
+                    (is_not_editing && !server_settings.installation_location.is_empty())
                         .then_some(ServerSettingsMessage::OpenServerInstallationDirectory.into()),
                     icons::FOLDER_OPEN.clone()
                 )

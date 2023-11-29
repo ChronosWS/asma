@@ -1,6 +1,6 @@
 use crate::{icons, models::*, server::UpdateMode, Message};
 use iced::{
-    widget::{column, container, container::Appearance, horizontal_space, row, text},
+    widget::{column, container, container::Appearance, horizontal_space, progress_bar, row, text},
     Alignment, Background, BorderRadius, Color, Element, Length, Theme,
 };
 
@@ -77,13 +77,27 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
             )
             .width(Length::Fill),
         ),
-        InstallState::UpdateStarting => container(text("Steam update in progress...")),
-        InstallState::Downloading(progress) => {
-            container(text(format!("Steam Downloading: {}%...", progress)))
-        }
-        InstallState::Verifying(progress) => {
-            container(text(format!("Steam Verifying: {}%...", progress)))
-        }
+        InstallState::UpdateStarting => container(text("Step 1: Initializing..."))
+            .padding(5)
+            .align_y(iced::alignment::Vertical::Center),
+        InstallState::Downloading(progress) => container(
+            row![
+                text("Step 2: Downloading..."),
+                progress_bar(0.0..=100.0, progress / 2.0)
+            ]
+            .align_items(Alignment::Center)
+            .padding(5)
+            .spacing(5),
+        ),
+        InstallState::Verifying(progress) => container(
+            row![
+                text("Step 3: Verifying..."),
+                progress_bar(0.0..=100.0, 50.0 + (progress / 2.0))
+            ]
+            .align_items(Alignment::Center)
+            .padding(5)
+            .spacing(5),
+        ),
         InstallState::Validating => container(text("Validating install...")),
         InstallState::Installed {
             version,

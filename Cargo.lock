@@ -163,10 +163,11 @@ dependencies = [
 
 [[package]]
 name = "asma"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "anyhow",
  "chrono",
+ "conpty",
  "futures-util",
  "hex",
  "iced",
@@ -588,6 +589,15 @@ name = "com-rs"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf43edc576402991846b093a7ca18a3477e0ef9c588cde84964b5d3e43016642"
+
+[[package]]
+name = "conpty"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b72b06487a0d4683349ad74d62e87ad639b09667082b3c495c5b6bab7d84b3da"
+dependencies = [
+ "windows 0.44.0",
+]
 
 [[package]]
 name = "const-random"
@@ -4783,6 +4793,15 @@ dependencies = [
  "clipboard_x11",
  "raw-window-handle",
  "thiserror",
+]
+
+[[package]]
+name = "windows"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e745dab35a0c4c77aa3ce42d595e13d2003d6902d6b08c9ef5fc326d08da12b"
+dependencies = [
+ "windows-targets 0.42.2",
 ]
 
 [[package]]

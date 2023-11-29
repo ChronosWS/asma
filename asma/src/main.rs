@@ -914,13 +914,11 @@ impl Application for AppState {
                 main_content,
                 dialogs::metadata_editor::make_dialog(&self, edit_context),
             )
-            .on_blur(MetadataEditorMessage::CloseMetadataEditor.into())
             .into(),
             MainWindowMode::EditProfile(edit_context) => Modal::new(
                 main_content,
                 dialogs::server_settings::make_dialog(&self, edit_context),
             )
-            .on_blur(ServerSettingsMessage::CloseServerSettings.into())
             .into(),
         };
         if self.global_settings.debug_ui {

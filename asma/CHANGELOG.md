@@ -1,5 +1,10 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.2.8] - Improved installation experience
+* Can now cancel creation of a new server
+* Can't leave the server create without setting installation directory
+* Accurate progress bar during install
+
 [0.2.7] - Fix metadata for CustomNotificationUrl
 
 [0.2.6] - Add Logo and icon, change default window size
