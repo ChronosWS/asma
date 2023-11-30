@@ -40,7 +40,7 @@ pub enum ServerMonitorCommand {
         server_id: Uuid,
     },
     UpdateAsma,
-    CheckForAsmaUpdates
+    CheckForAsmaUpdates,
 }
 
 #[derive(Debug, Clone)]
@@ -119,13 +119,13 @@ pub async fn monitor_server(
     loop {
         loop {
             // Check for new commands
-            let command = command.try_recv();
+            let command = timeout(Duration::from_secs(5), command.recv()).await;
             match command {
-                Ok(ServerMonitorCommand::AddServer {
+                Ok(Some(ServerMonitorCommand::AddServer {
                     server_id,
                     installation_dir,
                     rcon_settings,
-                }) => {
+                })) => {
                     let path = Path::new(&installation_dir)
                         .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe");
                     if std::fs::metadata(&path).is_ok() {
@@ -207,7 +207,7 @@ pub async fn monitor_server(
                             .await;
                     }
                 }
-                Ok(ServerMonitorCommand::StopServer { server_id }) => {
+                Ok(Some(ServerMonitorCommand::StopServer { server_id })) => {
                     if let Some(record) = server_records.get_mut(&server_id) {
                         try_send_rcon_command(
                             record.server_id,
@@ -219,7 +219,7 @@ pub async fn monitor_server(
                         record.is_stopping = true;
                     }
                 }
-                Ok(ServerMonitorCommand::KillServer { server_id }) => {
+                Ok(Some(ServerMonitorCommand::KillServer { server_id })) => {
                     if let Some(record) = server_records.get_mut(&server_id) {
                         if let Some(process) = system.process(record.pid) {
                             trace!("Sending KILL to {}", record.pid);
@@ -228,7 +228,7 @@ pub async fn monitor_server(
                         }
                     }
                 }
-                Ok(ServerMonitorCommand::UpdateAsma) => {
+                Ok(Some(ServerMonitorCommand::UpdateAsma)) => {
                     match update_asma(&status_sender, &monitor_config.app_update_url).await {
                         Ok(_) => {
                             let _ = status_sender
@@ -247,15 +247,15 @@ pub async fn monitor_server(
                         }
                     }
                 }
-                Ok(ServerMonitorCommand::CheckForAsmaUpdates) => {
+                Ok(Some(ServerMonitorCommand::CheckForAsmaUpdates)) => {
                     last_asma_update_check = None
                 }
-                Err(TryRecvError::Disconnected) => {
+                Ok(None) => {
                     trace!("Closing monitor_server channel");
                     return Ok(());
                 }
-                Err(TryRecvError::Empty) => {
-                    // No more commands
+                Err(_elapsed) => {
+                    // Timed out waiting for commands
                     break;
                 }
             }
@@ -264,7 +264,9 @@ pub async fn monitor_server(
         // Check for ASMA updates
         if let Some(last_checked_time) = last_asma_update_check {
             let now = Instant::now();
-            if now - last_checked_time > Duration::from_secs(monitor_config.app_update_check_seconds) {
+            if now - last_checked_time
+                > Duration::from_secs(monitor_config.app_update_check_seconds)
+            {
                 let _ = check_for_asma_updates(&status_sender, &monitor_config.app_update_url)
                     .await
                     .map_err(|e| {

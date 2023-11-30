@@ -1,5 +1,5 @@
 use iced::{
-    widget::{column, container, horizontal_space, row, text, Row, image},
+    widget::{column, container, horizontal_space, image, row, text, Row},
     Alignment, Length,
 };
 
@@ -16,7 +16,9 @@ use super::make_button;
 pub fn main_header(global_state: &GlobalState) -> Row<Message> {
     row![
         column![
-            image::Image::new(icons::LOGO.clone()).width(300).height(100),
+            image::Image::new(icons::LOGO.clone())
+                .width(300)
+                .height(100),
             row![
                 make_button(
                     "Global Settings...",
@@ -57,7 +59,18 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
                     container(text("Downloading..."))
                 }
                 AsmaUpdateState::UpdateFailed => {
-                    container(text("UPDATE FAILED"))
+                    container(
+                        row![
+                            text("UPDATE FAILED"),
+                            make_button(
+                                "",
+                                Some(Message::CheckForAsmaUpdates),
+                                icons::REFRESH.clone(),
+                            )
+                        ]
+                        .spacing(5)
+                        .align_items(Alignment::Center),
+                    )
                 }
                 AsmaUpdateState::AvailableVersion(available_app_version) => {
                     if &global_state.app_version < available_app_version {

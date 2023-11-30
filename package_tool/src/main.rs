@@ -3,13 +3,13 @@ use serde::Deserialize;
 use std::{
     ffi::OsStr,
     fs::File,
-    io::{BufReader, Read, Write},
+    io::{BufReader, Cursor, Read, Write},
     path::{Path, PathBuf},
     process::Command,
 };
 use structopt::{clap::arg_enum, StructOpt};
 use url::Url;
-use zip::write::FileOptions;
+use zip::{write::FileOptions, ZipArchive};
 
 arg_enum! {
     enum ReleaseTarget {
@@ -214,15 +214,38 @@ fn zip_asma(path: &PathBuf) -> Result<PathBuf> {
         .read_to_end(&mut asma_exe_bytes)
         .expect("Failed to read asma.exe bytes");
 
-    let mut zip_writer = zip::write::ZipWriter::new(
-        std::fs::File::create(&asma_zip_path).expect("Failed to create asma.zip"),
-    );
     let options = FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
         .unix_permissions(0o755);
+
+    println!("Compressing...");
+    // Write to a buffer
+    let write_buf: Vec<u8> = Vec::new();
+    let cursor = Cursor::new(write_buf);
+    let mut zip_writer = zip::write::ZipWriter::new(cursor);
     zip_writer.start_file("asma.exe", options).unwrap();
     zip_writer.write_all(&asma_exe_bytes).unwrap();
-    zip_writer.finish().unwrap();
+    let cursor = zip_writer.finish().unwrap();
+    let write_buf = cursor.into_inner();
+
+    // Write to zip file prospectively
+    println!("Writing...");
+    std::fs::write(&asma_zip_path, &write_buf).unwrap();
+
+    // Read back from the buffer to verify
+    println!("Verifying...");
+    let cursor = Cursor::new(std::fs::read(&asma_zip_path).unwrap());
+    let mut zip_archive = match ZipArchive::new(cursor) {
+        Ok(archive) => archive,
+        Err(e) => bail!("Failed to open archive: {}", e.to_string()),
+    };
+    let mut asma_exe_result = zip_archive
+        .by_name("asma.exe")
+        .with_context(|| "Failed to find asma.exe in zip archive")?;
+    let mut buf = Vec::new();
+    asma_exe_result
+        .read_to_end(&mut buf)
+        .with_context(|| "Failed to read asma.exe")?;
 
     Ok(asma_zip_path)
 }

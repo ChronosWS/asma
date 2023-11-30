@@ -5,7 +5,7 @@ use std::{
     thread::sleep, fmt::Display,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use rfd::MessageDialogResult;
 use serde::Deserialize;
@@ -37,8 +37,8 @@ mod release_files {
 mod release_files {
     pub const LATEST_REL_VERSION: &str = "latest-rel.json";
     pub const LATEST_DEV_VERSION: &str = "latest-dev.json";
-    pub const LATEST_REL_ZIP: &str = "latest-rel.json";
-    pub const LATEST_DEV_ZIP: &str = "latest-dev.json";
+    pub const LATEST_REL_ZIP: &str = "latest-rel.zip";
+    pub const LATEST_DEV_ZIP: &str = "latest-dev.zip";
 }
 
 pub async fn update_asma(
@@ -74,8 +74,11 @@ pub async fn update_asma(
 
     // Extract from the archive
     let buf_reader = Cursor::new(&bytes_stream[..]);
-    let mut zip_archive =
-        ZipArchive::new(buf_reader).with_context(|| "Failed to open archive from stream")?;
+    let mut zip_archive = match 
+        ZipArchive::new(buf_reader) {
+            Ok(archive) => archive,
+            Err(e) => bail!("Failed to open archive: {}", e.to_string())
+        };
     let mut asma_exe_result = zip_archive
         .by_name("asma.exe")
         .with_context(|| "Failed to find asma.exe in zip archive")?;

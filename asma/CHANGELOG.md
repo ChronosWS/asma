@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.2] - Fix bug in ASMA updater
+* Incorrect file reference broke downloads
+
 [0.3.1] - Metadata for bDisableStructurePlacementCollision and UseDynamicConfig
 * bDisableStructurePlacementCollision is added
 * UseDynamicConfig is fixed
