@@ -17,6 +17,7 @@ use iced::{
 use models::config::ConfigEntries;
 use reqwest::Url;
 use server::{RconResponse, ServerMonitorCommand, UpdateServerProgress, ValidationResult};
+use steamapi_utils::SteamAppVersion;
 use steamcmd_utils::validate_steamcmd;
 use structopt::StructOpt;
 use sysinfo::{System, SystemExt};
@@ -37,6 +38,7 @@ mod models;
 mod network_utils;
 mod server;
 mod settings_utils;
+mod steamapi_utils;
 mod steamcmd_utils;
 mod update_utils;
 
@@ -47,8 +49,8 @@ use uuid::Uuid;
 
 use crate::models::config::{ConfigLocation, IniFile, IniSection};
 use crate::server::{
-    monitor_server, start_server, update_inis_from_settings, validate_server,
-    MonitorConfig, RconMonitorSettings, UpdateMode, os::update_server
+    monitor_server, os::update_server, start_server, update_inis_from_settings, validate_server,
+    MonitorConfig, RconMonitorSettings, UpdateMode,
 };
 use crate::settings_utils::save_server_settings_with_error;
 
@@ -63,6 +65,9 @@ struct Opt {
 
     #[structopt(long, default_value = "900")]
     app_update_check_seconds: u64,
+
+    #[structopt(long, default_value = "900")]
+    server_update_check_seconds: u64,
 
     #[structopt(long)]
     do_update: bool,
@@ -125,6 +130,7 @@ pub enum AsyncNotification {
     UpdateServerProgress(Uuid, UpdateServerProgress),
     UpdateServerRunState(Uuid, RunState),
     AsmaUpdateState(AsmaUpdateState),
+    SteamAppUpdate(SteamAppVersion),
     RconResponse(Uuid, RconResponse),
 }
 
@@ -136,6 +142,7 @@ pub enum Message {
     OpenAsaPatchNotes,
     UpdateAsma,
     CheckForAsmaUpdates,
+    CheckForServerUpdates,
 
     // Dialogs
     GlobalSettings(GlobalSettingsMessage),
@@ -301,11 +308,13 @@ impl Application for AppState {
                 global_state: GlobalState {
                     app_version: AsmaVersion::new(env!("CARGO_PKG_VERSION")),
                     app_update_url: opt.app_update_url.to_owned(),
-                    app_update_check_seconds: opt.app_update_check_seconds.max(600),
+                    app_update_check_seconds: opt.app_update_check_seconds.min(600),
                     app_update_state: AsmaUpdateState::CheckingForUpdates,
                     local_ip: LocalIp::Unknown,
                     edit_metadata_id: None,
                     steamcmd_state,
+                    server_update_check_seconds: opt.server_update_check_seconds.min(600),
+                    steam_app_version: SteamAppVersion::default(),
                 },
                 config_metadata_state,
                 config_index,
@@ -380,6 +389,20 @@ impl Application for AppState {
                         send_monitor_command(
                             command_channel,
                             ServerMonitorCommand::CheckForAsmaUpdates,
+                        ),
+                        |_| Message::None,
+                    )
+                } else {
+                    Command::none()
+                }
+            }
+            Message::CheckForServerUpdates => {
+                trace!("CheckForServerUpdates");
+                if let Some(command_channel) = self.monitor_command_channel.to_owned() {
+                    Command::perform(
+                        send_monitor_command(
+                            command_channel,
+                            ServerMonitorCommand::CheckForServerUpdates,
                         ),
                         |_| Message::None,
                     )
@@ -674,6 +697,8 @@ impl Application for AppState {
                 ValidationResult::Success {
                     version,
                     install_time,
+                    time_updated,
+                    build_id,
                 },
             ) => {
                 trace!("Server Validated {}: {}", id, version);
@@ -683,6 +708,10 @@ impl Application for AppState {
                 server_state.install_state = InstallState::Installed {
                     version,
                     install_time,
+                    time_updated: chrono::DateTime::from_timestamp(time_updated as i64, 0)
+                        .unwrap_or_default()
+                        .into(),
+                    build_id,
                 };
                 server_state.run_state = RunState::Stopped;
                 Command::none()
@@ -722,6 +751,11 @@ impl Application for AppState {
                         MonitorConfig {
                             app_update_url: self.global_state.app_update_url.to_owned(),
                             app_update_check_seconds: self.global_state.app_update_check_seconds,
+                            steam_api_key: self.global_settings.steam_api_key.to_owned(),
+                            steam_app_id: self.global_settings.app_id.to_owned(),
+                            server_update_check_seconds: self
+                                .global_state
+                                .server_update_check_seconds,
                         },
                         monitor_recv,
                         sender,
@@ -827,6 +861,11 @@ impl Application for AppState {
                 self.global_state.app_update_state = update_state;
                 Command::none()
             }
+            Message::AsyncNotification(AsyncNotification::SteamAppUpdate(version)) => {
+                trace!("SteamAppUpdate: {:?}", version);
+                self.global_state.steam_app_version = version;
+                Command::none()
+            }
         }
     }
 
@@ -841,6 +880,11 @@ impl Application for AppState {
                             "Import...",
                             Some(Message::ImportServer),
                             icons::DOWNLOAD.clone()
+                        ),
+                        make_button(
+                            "Check for updates...",
+                            Some(Message::CheckForServerUpdates),
+                            icons::REFRESH.clone()
                         )
                     ]
                     .spacing(5)
@@ -858,7 +902,13 @@ impl Application for AppState {
                         )
                     } else {
                         container(scrollable(
-                            column(self.servers.iter().map(server_card).collect()).spacing(5),
+                            column(
+                                self.servers
+                                    .iter()
+                                    .map(|s| server_card(&self.global_state, s))
+                                    .collect(),
+                            )
+                            .spacing(5),
                         ))
                     }
                 ]

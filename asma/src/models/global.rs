@@ -1,7 +1,7 @@
 use reqwest::Url;
 use serde::{Serialize, Deserialize};
 
-use crate::update_utils::{AsmaUpdateState, AsmaVersion};
+use crate::{update_utils::{AsmaUpdateState, AsmaVersion}, steamapi_utils::SteamAppVersion};
 
 use super::{ThemeType, LocalIp};
 
@@ -41,6 +41,8 @@ pub struct GlobalState {
     pub local_ip: LocalIp,
     pub edit_metadata_id: Option<usize>,
     pub steamcmd_state: SteamCmdState,
+    pub server_update_check_seconds: u64,
+    pub steam_app_version: SteamAppVersion
 }
 
 pub fn get_default_app_id() -> String {

@@ -16,7 +16,7 @@ fn server_card_style(_theme: &Theme) -> Appearance {
     }
 }
 
-pub fn server_card(server: &Server) -> Element<'_, Message> {
+pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Element<'a, Message> {
     let run_state_content = match &server.state.run_state {
         RunState::NotInstalled => container(horizontal_space(Length::Shrink)),
         RunState::Stopped => container(make_button(
@@ -102,46 +102,69 @@ pub fn server_card(server: &Server) -> Element<'_, Message> {
         InstallState::Installed {
             version,
             install_time,
-        } => container(
-            if let RunState::Stopped = server.state.run_state {
-                row![
-                    text(format!("Version: {}", version)),
-                    text(format!(
-                        "Last Updated: {}",
-                        install_time.format("%Y-%m-%d %H:%M")
-                    )),
-                    horizontal_space(Length::Fill),
-                    make_button(
-                        "Update",
-                        Some(Message::InstallServer(server.id(), UpdateMode::Update)),
-                        icons::UP.clone(),
-                    ),
-                    make_button(
-                        "Validate",
-                        Some(Message::InstallServer(server.id(), UpdateMode::Validate)),
-                        icons::VALIDATE.clone(),
-                    ),
-                    make_button(
-                        "Start",
-                        Some(Message::StartServer(server.id())),
-                        icons::START.clone(),
-                    )
-                ]
-                .spacing(5)
-                .padding(5)
+            time_updated,
+            ..
+        } => {
+            let needs_update = if time_updated < &global_state.steam_app_version.timeupdated {
+                format!(
+                    " (update available {})",
+                    global_state
+                        .steam_app_version
+                        .timeupdated
+                        .format("%Y-%m-%d %H:%M")
+                )
             } else {
-                row![
-                    text(format!("Version: {}", version)),
-                    text(format!(
-                        "Last Updated: {}",
-                        install_time.format("%Y-%m-%d %H:%M")
-                    ))
-                ]
-                .spacing(5)
-                .padding(5)
-            }
-            .align_items(Alignment::Center),
-        ),
+                format!(
+                    " (up-to-date {})",
+                    global_state
+                        .steam_app_version
+                        .timeupdated
+                        .format("%Y-%m-%d %H:%M")
+                )
+            };
+            container(
+                if let RunState::Stopped = server.state.run_state {
+                    row![
+                        text(format!("Version: {}", version)),
+                        text(format!(
+                            "Last Updated: {}{}",
+                            install_time.format("%Y-%m-%d %H:%M"),
+                            needs_update
+                        )),
+                        horizontal_space(Length::Fill),
+                        make_button(
+                            "Update",
+                            Some(Message::InstallServer(server.id(), UpdateMode::Update)),
+                            icons::UP.clone(),
+                        ),
+                        make_button(
+                            "Validate",
+                            Some(Message::InstallServer(server.id(), UpdateMode::Validate)),
+                            icons::VALIDATE.clone(),
+                        ),
+                        make_button(
+                            "Start",
+                            Some(Message::StartServer(server.id())),
+                            icons::START.clone(),
+                        )
+                    ]
+                    .spacing(5)
+                    .padding(5)
+                } else {
+                    row![
+                        text(format!("Version: {}", version)),
+                        text(format!(
+                            "Last Updated: {}{}",
+                            install_time.format("%Y-%m-%d %H:%M"),
+                            needs_update
+                        ))
+                    ]
+                    .spacing(5)
+                    .padding(5)
+                }
+                .align_items(Alignment::Center),
+            )
+        }
         InstallState::FailedValidation(reason) => container(
             row![
                 text(format!("Validation failed: {}", reason)).width(Length::Fill),

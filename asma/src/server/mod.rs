@@ -8,8 +8,9 @@ use std::{
     fs::File,
     io::{ErrorKind, Read},
     path::{Path, PathBuf},
+    time::Duration,
 };
-use tokio::{process::Command, sync::mpsc::Sender};
+use tokio::{process::Command, sync::mpsc::Sender, task::yield_now, time::Instant};
 
 use tracing::{error, trace, warn};
 use uuid::Uuid;
@@ -326,11 +327,18 @@ pub mod os {
 
     use anyhow::{Context, Result};
     use regex::Regex;
-    use tokio::{sync::mpsc::Sender, process::{ChildStdout, Command}, io::{BufReader, AsyncBufReadExt}};
-    use tracing::{trace, error};
+    use tokio::{
+        io::{AsyncBufReadExt, BufReader},
+        process::{ChildStdout, Command},
+        sync::mpsc::Sender,
+    };
+    use tracing::{error, trace};
     use uuid::Uuid;
 
-    use crate::{server::{UpdateServerProgress, process_steamcmd_line}, AsyncNotification};
+    use crate::{
+        server::{process_steamcmd_line, UpdateServerProgress},
+        AsyncNotification,
+    };
 
     use super::UpdateMode;
 
@@ -548,7 +556,12 @@ pub mod os {
                         if let Some(index) = buf_as_str.find("\r") {
                             // Push the rest of this line
                             line_buf.push_str(&buf_as_str[0..index]);
-                            process_steamcmd_line(server_id, line_buf.trim(), &progress_parser, &progress);
+                            process_steamcmd_line(
+                                server_id,
+                                line_buf.trim(),
+                                &progress_parser,
+                                &progress,
+                            );
                             // Start a new line
                             line_buf.clear();
                             line_buf.push_str(&buf_as_str[index..]);
@@ -585,8 +598,12 @@ pub mod os {
     }
 }
 
-fn process_steamcmd_line(server_id: Uuid, line: &str, progress_parser: &Regex, progress: &Sender<AsyncNotification>) {
-    
+fn process_steamcmd_line(
+    server_id: Uuid,
+    line: &str,
+    progress_parser: &Regex,
+    progress: &Sender<AsyncNotification>,
+) {
     if let Some(captures) = progress_parser.captures(&line) {
         if captures.len() == 4 {
             let state = captures.name("state").expect("Failed to get state");
@@ -628,7 +645,7 @@ fn process_steamcmd_line(server_id: Uuid, line: &str, progress_parser: &Regex, p
 }
 
 // NOTE: PERFORMANCE: This algorithm works reasonably, but can take several seconds on debug builds.
-fn get_asa_version(exe_path: &PathBuf) -> Result<String> {
+async fn get_asa_version(exe_path: &PathBuf) -> Result<String> {
     let file = std::fs::File::open(exe_path)?;
     let mut reader = std::io::BufReader::new(file);
 
@@ -653,9 +670,21 @@ fn get_asa_version(exe_path: &PathBuf) -> Result<String> {
     }
 
     let mut bytes_read = Vec::new();
+    let mut last_yield_time = Instant::now();
+    let mut bytes_read_since_last_yield = 0usize;
     loop {
         bytes_read.clear();
         if read_to_byte(&mut reader, target_bytes[0]) {
+            bytes_read_since_last_yield += 1;
+
+            if bytes_read_since_last_yield > 100000 {
+                let now = Instant::now();
+                if Instant::now() - last_yield_time > Duration::from_millis(100) {
+                    yield_now().await;
+                    last_yield_time = now;
+                    bytes_read_since_last_yield = 0;
+                }
+            }
             let result = target_bytes[1..]
                 .iter()
                 .enumerate()
@@ -704,6 +733,8 @@ pub enum ValidationResult {
     Success {
         version: String,
         install_time: DateTime<Local>,
+        build_id: u64,
+        time_updated: u64,
     },
     Failed(String),
 }
@@ -721,7 +752,8 @@ pub async fn validate_server(
 
     // Validate install state
     let manifest_path = base_path.join(format!("steamapps/appmanifest_{}.acf", app_id.as_ref()));
-    match std::fs::read_to_string(manifest_path) {
+
+    let (time_updated, build_id) = match std::fs::read_to_string(manifest_path) {
         Err(err) => match err.kind() {
             ErrorKind::NotFound => {
                 trace!("{}: No appmanifest found", id);
@@ -730,26 +762,24 @@ pub async fn validate_server(
             _ => return Err(err.into()),
         },
         Ok(content) => {
-            let regex = Regex::new("StateFlags[^0-9]+(?<state>[0-9]+)")
-                .expect("Failed to build manifest searching regex");
-            let state_capture = content.lines().filter_map(|l| regex.captures(l)).next();
-            if let Some(state_capture) = state_capture {
-                let state_flags: u32 = state_capture
-                    .name("state")
-                    .expect("Failed to get named capture")
-                    .as_str()
-                    .parse()
-                    .with_context(|| "state flags failed to parse")?;
-                if state_flags != STATE_INSTALL_SUCCESSFUL {
-                    trace!("{}: Incomplete install (state = {})", id, state_flags);
-                    return Ok(ValidationResult::Failed("Incomplete".to_string()));
-                }
-            } else {
-                trace!("{}: appmanifest does not contain state information", id);
-                return Ok(ValidationResult::NotInstalled);
+            let state = extract_app_state_field(&content, "StateFlags")
+                .and_then(|v| v.parse::<u32>().ok())
+                .with_context(|| "Failed to find or parse StateFlags")?;
+            if state != STATE_INSTALL_SUCCESSFUL {
+                trace!("{}: Incomplete install (state = {})", id, state);
+                return Ok(ValidationResult::Failed("Incomplete".to_string()));
             }
+
+            let time_updated = extract_app_state_field(&content, "LastUpdated")
+                .and_then(|v| v.parse().ok())
+                .with_context(|| "Failed to find or parse LastUpdated")?;
+
+            let build_id = extract_app_state_field(&content, "buildid")
+                .and_then(|v| v.parse().ok())
+                .with_context(|| "buildid failed to parse")?;
+            (time_updated, build_id)
         }
-    }
+    };
 
     // Validate binary path
     let binary_path = base_path.join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe");
@@ -765,12 +795,27 @@ pub async fn validate_server(
     };
 
     // Find the version in the binary
-    let version = get_asa_version(&binary_path)?;
+    let version = get_asa_version(&binary_path).await?;
 
     let install_time: DateTime<Local> =
         DateTime::from(metadata.created().with_context(|| "No Creation Time")?);
     Ok(ValidationResult::Success {
         version,
         install_time,
+        time_updated,
+        build_id,
     })
+}
+
+fn make_field_regex(field: &str) -> Regex {
+    let regex = format!(r#"{}\"[^"]+\"(?<value>[^"]*)"#, field);
+    Regex::new(&regex).expect("Failed to build manifest searching regex")
+}
+
+fn extract_app_state_field<'a>(content: &'a str, field: &str) -> Option<&'a str> {
+    let regex = make_field_regex(field);
+    regex
+        .captures(content)
+        .and_then(|c| c.name("value"))
+        .and_then(|m| Some(m.as_str()))
 }

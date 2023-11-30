@@ -2,8 +2,8 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::RconPlayerEntry;
 use super::config::ConfigEntries;
+use crate::server::RconPlayerEntry;
 
 // WARNING: If you add non-Optional values here, you must give them defaults or you
 //          will break manifest loading
@@ -11,13 +11,13 @@ use super::config::ConfigEntries;
 pub struct ServerSettings {
     pub id: Uuid,
     pub name: String,
-    pub installation_location: String, 
+    pub installation_location: String,
     #[serde(default)]
     pub allow_external_ini_management: bool,
     #[serde(default)]
     pub use_external_rcon: bool,
     #[serde(default)]
-    pub config_entries: ConfigEntries
+    pub config_entries: ConfigEntries,
 }
 
 #[derive(Debug, Clone)]
@@ -26,16 +26,16 @@ pub struct RunData {
     pub cpu_usage: f32,
     pub memory_usage: u64,
     pub rcon_enabled: bool,
-    pub player_list: Vec<RconPlayerEntry>
+    pub player_list: Vec<RconPlayerEntry>,
 }
 
 impl RunData {
     pub fn get_memory_display(&self) -> (u64, &'static str) {
         match self.memory_usage {
-            x if x < 1024 => { (x, "b")}
-            x if x < 1024*1024 => { (x/1024, "Kb")}
-            x if x < 1024*1024*1024 => { (x/(1024*1024), "Mb")}
-            x => { (x/(1024*1024*1024), "Gb")}
+            x if x < 1024 => (x, "b"),
+            x if x < 1024 * 1024 => (x / 1024, "Kb"),
+            x if x < 1024 * 1024 * 1024 => (x / (1024 * 1024), "Mb"),
+            x => (x / (1024 * 1024 * 1024), "Gb"),
         }
     }
 }
@@ -56,7 +56,12 @@ pub enum InstallState {
     Downloading(f32),
     Verifying(f32),
     Validating,
-    Installed { version: String, install_time: DateTime<Local> },
+    Installed {
+        version: String,
+        install_time: DateTime<Local>,
+        time_updated: DateTime<Local>,
+        build_id: u64,
+    },
     FailedValidation(String),
 }
 

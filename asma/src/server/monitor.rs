@@ -20,7 +20,7 @@ use uuid::Uuid;
 use crate::{
     models::{RunData, RunState},
     update_utils::{check_for_asma_updates, update_asma, AsmaUpdateState},
-    AsyncNotification,
+    AsyncNotification, steamapi_utils::check_for_steam_updates,
 };
 
 pub struct RconMonitorSettings {
@@ -41,6 +41,7 @@ pub enum ServerMonitorCommand {
     },
     UpdateAsma,
     CheckForAsmaUpdates,
+    CheckForServerUpdates,
 }
 
 #[derive(Debug, Clone)]
@@ -92,6 +93,9 @@ struct ServerProcessRecord {
 pub struct MonitorConfig {
     pub app_update_url: Url,
     pub app_update_check_seconds: u64,
+    pub steam_api_key: String,
+    pub steam_app_id: String,
+    pub server_update_check_seconds: u64,
 }
 
 // Special RCON queries that don't bubble up
@@ -114,6 +118,7 @@ pub async fn monitor_server(
     let mut rcon_responses = Vec::new();
     let mut player_list = Vec::<RconPlayerEntry>::new();
     let mut last_asma_update_check = None;
+    let mut last_server_update_check = None;
     let player_list_regex = Regex::new("(?<num>[0-9]+). (?<name>[^,]+), (?<userid>[0-9a-f]+)")
         .expect("Failed to compile player list regex");
     loop {
@@ -250,6 +255,9 @@ pub async fn monitor_server(
                 Ok(Some(ServerMonitorCommand::CheckForAsmaUpdates)) => {
                     last_asma_update_check = None
                 }
+                Ok(Some(ServerMonitorCommand::CheckForServerUpdates)) => {
+                    last_server_update_check = None
+                }
                 Ok(None) => {
                     trace!("Closing monitor_server channel");
                     return Ok(());
@@ -280,6 +288,41 @@ pub async fn monitor_server(
                 .await
                 .map_err(|e| warn!("Failed to get latest ASMA version info: {}", e.to_string()));
             last_asma_update_check = Some(Instant::now())
+        }
+
+        // Check for server updates
+        if let Some(last_checked_time) = last_server_update_check {
+            let now = Instant::now();
+            if now - last_checked_time
+                > Duration::from_secs(monitor_config.server_update_check_seconds)
+            {
+                let _ = check_for_steam_updates(
+                    &status_sender,
+                    &monitor_config.steam_app_id,
+                )
+                .await
+                .map_err(|e| {
+                    warn!(
+                        "Failed to get latest server version info: {}",
+                        e.to_string()
+                    )
+                });
+                last_server_update_check = Some(now)
+            }
+        } else {
+            // First boot check
+            let _ = check_for_steam_updates(
+                &status_sender,
+                &monitor_config.steam_app_id,
+            )
+            .await
+            .map_err(|e| {
+                warn!(
+                    "Failed to get latest server version info: {}",
+                    e.to_string()
+                )
+            });
+            last_server_update_check = Some(Instant::now())
         }
 
         // Check the status of each server now

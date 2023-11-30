@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.3] - Notify of new Server updates available
+* The server card will now indicate whether there is a new server build available and
+  what the time of the last server build was.
+
 [0.3.2] - Fix bug in ASMA updater
 * Incorrect file reference broke downloads
 
