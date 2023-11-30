@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.1] - Metadata for bDisableStructurePlacementCollision and UseDynamicConfig
+* bDisableStructurePlacementCollision is added
+* UseDynamicConfig is fixed
+
 [0.3.0] - Version bump to overcome version checking issue in earlier builds
 
 [0.2.11] - Fix bug in version checking
