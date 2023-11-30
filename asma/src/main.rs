@@ -982,6 +982,11 @@ impl Application for AppState {
 fn main() -> iced::Result {
     init_tracing();
 
+    #[cfg(not(feature = "conpty"))]
+    trace!("Using compatibility console handling");
+    #[cfg(feature = "conpty")]
+    trace!("Using advanced console handling");
+
     let opt = Opt::from_args();
 
     if opt.do_update {

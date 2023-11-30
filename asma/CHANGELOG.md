@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.4] - Fix issue with spaces in path name for server installs
+* Installs to servers with spaces in their names should now work.
+
 [0.3.3] - Notify of new Server updates available
 * The server card will now indicate whether there is a new server build available and
   what the time of the last server build was.

@@ -10,9 +10,9 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use tokio::{process::Command, sync::mpsc::Sender, task::yield_now, time::Instant};
+use tokio::{process::Command, task::yield_now, time::Instant};
 
-use tracing::{error, trace, warn};
+use tracing::{error, trace};
 use uuid::Uuid;
 
 use crate::{
@@ -24,7 +24,6 @@ use crate::{
         },
         ServerSettings,
     },
-    AsyncNotification,
 };
 
 mod monitor;
@@ -332,13 +331,10 @@ pub mod os {
         process::{ChildStdout, Command},
         sync::mpsc::Sender,
     };
-    use tracing::{error, trace};
+    use tracing::{error, trace, warn};
     use uuid::Uuid;
 
-    use crate::{
-        server::{process_steamcmd_line, UpdateServerProgress},
-        AsyncNotification,
-    };
+    use crate::{server::UpdateServerProgress, AsyncNotification};
 
     use super::UpdateMode;
 
@@ -410,7 +406,8 @@ pub mod os {
         loop {
             match lines.next_line().await {
                 Ok(Some(line)) => {
-                    process_steamcmd_line(server_id, line.trim(), &progress_parser, &progress);
+                    process_steamcmd_line(server_id, line.trim(), &progress_parser, &progress)
+                        .await;
                 }
                 Ok(None) => {
                     break;
@@ -432,6 +429,56 @@ pub mod os {
             .map(|_| ())
             .with_context(|| "steam_cmd failed")
     }
+
+    async fn process_steamcmd_line(
+        server_id: Uuid,
+        line: &str,
+        progress_parser: &Regex,
+        progress: &Sender<AsyncNotification>,
+    ) {
+        if let Some(captures) = progress_parser.captures(&line) {
+            if captures.len() == 4 {
+                let state = captures.name("state").expect("Failed to get state");
+                let desc = captures.name("desc").expect("Failed to get desc");
+                let percent = captures.name("percent").expect("Failed to get percent");
+
+                let state =
+                    u64::from_str_radix(state.as_str(), 16).expect("Failed to parse status code");
+                let percent: f32 = percent.as_str().parse().expect("Failed to parse prpogress");
+
+                match state {
+                    0x61 => {
+                        trace!("{}: SteamCMD: Downloading {}", server_id, percent);
+                        let _ = progress
+                            .send(AsyncNotification::UpdateServerProgress(
+                                server_id,
+                                UpdateServerProgress::Downloading(percent),
+                            ))
+                            .await;
+                    }
+                    0x81 => {
+                        trace!("{}: SteamCMD: Verifying {}", server_id, percent);
+                        let _ = progress
+                            .send(AsyncNotification::UpdateServerProgress(
+                                server_id,
+                                UpdateServerProgress::Verifying(percent),
+                            ))
+                            .await;
+                    }
+                    other => {
+                        warn!(
+                            "{}: SteamCMD: Unknown state: {} ({})",
+                            server_id,
+                            other,
+                            desc.as_str()
+                        )
+                    }
+                }
+            }
+        } else {
+            trace!("{}: SteamCMD: {}", server_id, &line);
+        }
+    }
 }
 
 #[cfg(feature = "conpty")]
@@ -445,13 +492,10 @@ pub mod os {
     use anyhow::{Context, Result};
     use regex::Regex;
     use tokio::sync::mpsc::Sender;
-    use tracing::trace;
+    use tracing::{trace, warn};
     use uuid::Uuid;
 
-    use crate::{
-        server::{process_steamcmd_line, UpdateServerProgress},
-        AsyncNotification,
-    };
+    use crate::{server::UpdateServerProgress, AsyncNotification};
 
     use super::UpdateMode;
 
@@ -493,9 +537,10 @@ pub mod os {
         std::fs::create_dir_all(&installation_dir)
             .with_context(|| "Failed to create installation directory")?;
 
+        let installation_dir_arg = &format!(r#""{}""#, &installation_dir);
         let mut args = vec![
             "+force_install_dir",
-            &installation_dir,
+            &installation_dir_arg,
             "+login",
             "anonymous",
         ];
@@ -596,51 +641,51 @@ pub mod os {
         trace!("Update finished");
         Ok(())
     }
-}
 
-fn process_steamcmd_line(
-    server_id: Uuid,
-    line: &str,
-    progress_parser: &Regex,
-    progress: &Sender<AsyncNotification>,
-) {
-    if let Some(captures) = progress_parser.captures(&line) {
-        if captures.len() == 4 {
-            let state = captures.name("state").expect("Failed to get state");
-            let desc = captures.name("desc").expect("Failed to get desc");
-            let percent = captures.name("percent").expect("Failed to get percent");
+    fn process_steamcmd_line(
+        server_id: Uuid,
+        line: &str,
+        progress_parser: &Regex,
+        progress: &Sender<AsyncNotification>,
+    ) {
+        if let Some(captures) = progress_parser.captures(&line) {
+            if captures.len() == 4 {
+                let state = captures.name("state").expect("Failed to get state");
+                let desc = captures.name("desc").expect("Failed to get desc");
+                let percent = captures.name("percent").expect("Failed to get percent");
 
-            let state =
-                u64::from_str_radix(state.as_str(), 16).expect("Failed to parse status code");
-            let percent: f32 = percent.as_str().parse().expect("Failed to parse prpogress");
+                let state =
+                    u64::from_str_radix(state.as_str(), 16).expect("Failed to parse status code");
+                let percent: f32 = percent.as_str().parse().expect("Failed to parse prpogress");
 
-            match state {
-                0x61 => {
-                    trace!("{}: SteamCMD: Downloading {}", server_id, percent);
-                    let _ = progress.blocking_send(AsyncNotification::UpdateServerProgress(
-                        server_id,
-                        UpdateServerProgress::Downloading(percent),
-                    ));
-                }
-                0x81 => {
-                    trace!("{}: SteamCMD: Verifying {}", server_id, percent);
-                    let _ = progress.blocking_send(AsyncNotification::UpdateServerProgress(
-                        server_id,
-                        UpdateServerProgress::Verifying(percent),
-                    ));
-                }
-                other => {
-                    warn!(
-                        "{}: SteamCMD: Unknown state: {} ({})",
-                        server_id,
-                        other,
-                        desc.as_str()
-                    )
+                match state {
+                    0x61 => {
+                        trace!("{}: SteamCMD: Downloading {}", server_id, percent);
+                        let _ = progress.blocking_send(AsyncNotification::UpdateServerProgress(
+                            server_id,
+                            UpdateServerProgress::Downloading(percent),
+                        ));
+                    }
+                    0x81 => {
+                        trace!("{}: SteamCMD: Verifying {}", server_id, percent);
+                        let _ = progress.blocking_send(AsyncNotification::UpdateServerProgress(
+                            server_id,
+                            UpdateServerProgress::Verifying(percent),
+                        ));
+                    }
+                    other => {
+                        warn!(
+                            "{}: SteamCMD: Unknown state: {} ({})",
+                            server_id,
+                            other,
+                            desc.as_str()
+                        )
+                    }
                 }
             }
+        } else {
+            trace!("{}: SteamCMD: {}", server_id, &line);
         }
-    } else {
-        trace!("{}: SteamCMD: {}", server_id, &line);
     }
 }
 

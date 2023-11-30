@@ -12,7 +12,8 @@
                 "args": [
                     "build",
                     "--bin=asma",
-                    "--package=asma"
+                    "--package=asma",
+                    "-F conpty"
                 ],
                 "filter": {
                     "name": "asma",
@@ -31,7 +32,8 @@
                     "test",
                     "--no-run",
                     "--bin=asma",
-                    "--package=asma"
+                    "--package=asma",
+                    "-F conpty"
                 ],
                 "filter": {
                     "name": "asma",
