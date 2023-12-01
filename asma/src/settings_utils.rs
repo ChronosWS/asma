@@ -9,7 +9,7 @@ use crate::models::{
         ConfigMetadata, ConfigQuantity, ConfigValue, ConfigValueBaseType, ConfigValueType,
         ConfigVariant,
     },
-    get_default_app_id, get_default_patch_notes_url, GlobalSettings, ServerSettings,
+    get_default_app_id, GlobalSettings, ServerSettings,
     ThemeType,
 };
 
@@ -48,7 +48,6 @@ pub fn default_global_settings() -> GlobalSettings {
         steamcmd_directory: default_steamcmd_directory.to_str().unwrap().into(),
         steam_api_key: String::new(),
         app_id: get_default_app_id(),
-        patch_notes_url: get_default_patch_notes_url(),
     }
 }
 

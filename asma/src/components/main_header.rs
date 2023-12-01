@@ -21,14 +21,14 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
                 .height(100),
             row![
                 make_button(
-                    "Global Settings...",
+                    "Settings",
                     Some(Message::GlobalSettings(
                         GlobalSettingsMessage::OpenGlobalSettings
                     )),
                     icons::SETTINGS.clone()
                 ),
                 make_button(
-                    "Config Metadata...",
+                    "Metadata",
                     Some(Message::MetadataEditor(
                         MetadataEditorMessage::OpenMetadataEditor
                     )),
@@ -43,46 +43,21 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
         column![
             text("My Public IP"),
             text(global_state.local_ip.to_string()),
-            make_button(
-                "ASA Patch Notes",
-                Some(Message::OpenAsaPatchNotes),
-                icons::LOGS.clone()
-            ),
-            match &global_state.app_update_state {
-                AsmaUpdateState::UpdateReady => {
-                    container(text("Restarting..."))
-                }
-                AsmaUpdateState::CheckingForUpdates => {
-                    container(text("Checking for ASMA updates..."))
-                }
-                AsmaUpdateState::Downloading => {
-                    container(text("Downloading..."))
-                }
-                AsmaUpdateState::UpdateFailed => {
-                    container(
-                        row![
-                            text("UPDATE FAILED"),
-                            make_button(
-                                "",
-                                Some(Message::CheckForAsmaUpdates),
-                                icons::REFRESH.clone(),
-                            )
-                        ]
-                        .spacing(5)
-                        .align_items(Alignment::Center),
-                    )
-                }
-                AsmaUpdateState::AvailableVersion(available_app_version) => {
-                    if &global_state.app_version < available_app_version {
-                        container(make_button(
-                            format!("Update to {}", available_app_version),
-                            Some(Message::UpdateAsma),
-                            icons::UP.clone(),
-                        ))
-                    } else {
+            row![
+                match &global_state.app_update_state {
+                    AsmaUpdateState::UpdateReady => {
+                        container(text("Restarting..."))
+                    }
+                    AsmaUpdateState::CheckingForUpdates => {
+                        container(text("Checking for ASMA updates..."))
+                    }
+                    AsmaUpdateState::Downloading => {
+                        container(text("Downloading..."))
+                    }
+                    AsmaUpdateState::UpdateFailed => {
                         container(
                             row![
-                                text("No updates available"),
+                                text("UPDATE FAILED"),
                                 make_button(
                                     "",
                                     Some(Message::CheckForAsmaUpdates),
@@ -93,8 +68,37 @@ pub fn main_header(global_state: &GlobalState) -> Row<Message> {
                             .align_items(Alignment::Center),
                         )
                     }
-                }
-            }
+                    AsmaUpdateState::AvailableVersion(available_app_version) => {
+                        if &global_state.app_version < available_app_version {
+                            container(make_button(
+                                format!("Update to {}", available_app_version),
+                                Some(Message::UpdateAsma),
+                                icons::UP.clone(),
+                            ))
+                        } else {
+                            container(
+                                row![
+                                    text("No updates available"),
+                                    make_button(
+                                        "",
+                                        Some(Message::CheckForAsmaUpdates),
+                                        icons::REFRESH.clone(),
+                                    )
+                                ]
+                                .spacing(5)
+                                .align_items(Alignment::Center),
+                            )
+                        }
+                    }
+                },
+                make_button(
+                    "ASMA Changelogs",
+                    Some(Message::OpenAsmaChangelog),
+                    icons::LOGS.clone()
+                )
+            ]
+            .spacing(5)
+            .align_items(Alignment::Center)
         ]
         .spacing(5)
         .padding(5)

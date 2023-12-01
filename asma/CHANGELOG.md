@@ -1,5 +1,11 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.5] - Misc UI updates
+* Moved ASA patch notes button to servers area
+* Made server name more prominent in the server card, and the ID less prominent
+* New buttons to quickly go to the logs and inis directories for servers
+* Easier to read app icon for the taskbar/window
+
 [0.3.4] - Fix issue with spaces in path name for server installs
 * Installs to servers with spaces in their names should now work.
 

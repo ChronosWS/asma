@@ -29,8 +29,6 @@ pub struct GlobalSettings {
     pub debug_ui: bool,
     #[serde(skip)]
     pub app_data_directory: String,
-    #[serde(default = "get_default_patch_notes_url")]
-    pub patch_notes_url: String,
 }
 
 pub struct GlobalState {
@@ -49,6 +47,10 @@ pub fn get_default_app_id() -> String {
     "2430930".into()
 }
 
-pub fn get_default_patch_notes_url() -> String {
+pub fn get_patch_notes_url() -> String {
     "https://survivetheark.com/index.php?/forums/forum/5-changelog-patch-notes/".into()
+}
+
+pub fn get_changelog_url() -> String {
+    "https://github.com/ChronosWS/asma/blob/master/asma/CHANGELOG.md".into()
 }

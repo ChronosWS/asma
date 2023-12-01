@@ -8,7 +8,7 @@ use dialogs::server_settings::{self, ServerSettingsContext, ServerSettingsMessag
 use fonts::{get_system_font_bytes, BOLD_FONT};
 use futures_util::SinkExt;
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{column, container, horizontal_rule, row, scrollable, text};
+use iced::widget::{column, container, horizontal_rule, horizontal_space, row, scrollable, text};
 use iced::{
     executor, font, subscription, Application, Color, Command, Element, Event, Length, Settings,
     Subscription, Theme,
@@ -140,6 +140,7 @@ pub enum Message {
     FontLoaded(Result<String, font::Error>),
     RefreshIp(LocalIp),
     OpenAsaPatchNotes,
+    OpenAsmaChangelog,
     UpdateAsma,
     CheckForAsmaUpdates,
     CheckForServerUpdates,
@@ -152,6 +153,8 @@ pub enum Message {
     // Servers
     NewServer,
     ImportServer,
+    OpenLogs(Uuid),
+    OpenInis(Uuid),
     EditServer(Uuid),
     InstallServer(Uuid, UpdateMode),
     ServerUpdated(Uuid),
@@ -365,7 +368,14 @@ impl Application for AppState {
             }
             Message::OpenAsaPatchNotes => {
                 let _ = std::process::Command::new("explorer")
-                    .arg(&self.global_settings.patch_notes_url)
+                    .arg(get_patch_notes_url())
+                    .spawn()
+                    .map_err(|e| error!("Failed to spawn form link: {}", e.to_string()));
+                Command::none()
+            }
+            Message::OpenAsmaChangelog => {
+                let _ = std::process::Command::new("explorer")
+                    .arg(get_changelog_url())
                     .spawn()
                     .map_err(|e| error!("Failed to spawn form link: {}", e.to_string()));
                 Command::none()
@@ -637,6 +647,24 @@ impl Application for AppState {
 
                 Command::none()
             }
+            Message::OpenLogs(id) => {
+                if let Some(logs_dir) = self.find_server(id).and_then(|s| s.1.get_logs_dir()) {
+                    let _ = std::process::Command::new("explorer")
+                        .arg(logs_dir)
+                        .spawn()
+                        .map_err(|e| error!("Failed to open logs dir: {}", e.to_string()));
+                }
+                Command::none()
+            }
+            Message::OpenInis(id) => {
+                if let Some(inis_dir) = self.find_server(id).and_then(|s| s.1.get_inis_dir()) {
+                    let _ = std::process::Command::new("explorer")
+                        .arg(inis_dir)
+                        .spawn()
+                        .map_err(|e| error!("Failed to open INIs dir: {}", e.to_string()));
+                }
+                Command::none()
+            }
             Message::EditServer(id) => {
                 trace!("Edit Server {}", id);
                 let (id, _) = self
@@ -881,10 +909,16 @@ impl Application for AppState {
                             Some(Message::ImportServer),
                             icons::DOWNLOAD.clone()
                         ),
+                        horizontal_space(Length::Fill),
                         make_button(
                             "Check for updates...",
                             Some(Message::CheckForServerUpdates),
                             icons::REFRESH.clone()
+                        ),
+                        make_button(
+                            "ASA Patch Notes",
+                            Some(Message::OpenAsaPatchNotes),
+                            icons::LOGS.clone()
                         )
                     ]
                     .spacing(5)
@@ -997,7 +1031,7 @@ fn main() -> iced::Result {
         settings.window.size = (1536, 1280);
         settings.window.icon = Some(
             iced::window::icon::from_file_data(
-                std::include_bytes!("../res/icons/ASMA_SteveLastics.png"),
+                std::include_bytes!("../res/icons/DinoHead.png"),
                 Some(iced::advanced::graphics::image::image_rs::ImageFormat::Png),
             )
             .expect("Failed to load icon"),

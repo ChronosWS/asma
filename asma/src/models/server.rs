@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -18,6 +20,29 @@ pub struct ServerSettings {
     pub use_external_rcon: bool,
     #[serde(default)]
     pub config_entries: ConfigEntries,
+}
+
+impl ServerSettings {
+    pub fn get_logs_dir(&self) -> Option<PathBuf> {
+        let mut logs_dir = PathBuf::from(&self.installation_location);
+        logs_dir.push("ShooterGame");
+        logs_dir.push("Saved");
+        logs_dir.push("Logs");
+        std::fs::metadata(&logs_dir)
+            .map(|_| Some(logs_dir))
+            .unwrap_or_default()
+    }
+    
+    pub fn get_inis_dir(&self) -> Option<PathBuf> {
+        let mut inis_dir = PathBuf::from(&self.installation_location);
+        inis_dir.push("ShooterGame");
+        inis_dir.push("Saved");
+        inis_dir.push("Config");
+        inis_dir.push("WindowsServer");
+        std::fs::metadata(&inis_dir)
+            .map(|_| Some(inis_dir))
+            .unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Clone)]

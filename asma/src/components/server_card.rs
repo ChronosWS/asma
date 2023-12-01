@@ -189,15 +189,26 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
     container(
         column![
             row![
-                text("Id:").width(30),
-                text(server.settings.id.to_string()).width(325),
-                text("Name:").width(50),
-                text(server.settings.name.to_string()),
+                column![
+                    text(server.settings.name.to_string()).size(24),
+                    text(server.settings.id.to_string()).size(12),
+                ]
+                .align_items(Alignment::Start),
                 horizontal_space(Length::Fill),
                 make_button(
-                    "Edit...",
+                    "INIs",
+                    server.settings.get_inis_dir().map(|_| Message::OpenInis(server.settings.id)),
+                    icons::FOLDER_OPEN.clone()
+                ),
+                make_button(
+                    "Logs",
+                    server.settings.get_logs_dir().map(|_| Message::OpenLogs(server.settings.id)),
+                    icons::FOLDER_OPEN.clone()
+                ),
+                make_button(
+                    "",
                     Some(Message::EditServer(server.settings.id)),
-                    icons::EDIT.clone()
+                    icons::SETTINGS.clone()
                 )
             ]
             .spacing(5)
