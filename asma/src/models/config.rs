@@ -109,6 +109,15 @@ pub struct ConfigStructFieldVariant {
     pub value: ConfigVariant,
 }
 
+impl ConfigStructFieldVariant {
+    pub fn get_field_type(&self) -> ConfigStructFieldType {
+        ConfigStructFieldType {
+            name: self.name.to_owned(),
+            value_type: self.value.get_value_type(),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum ConfigValue {
     Bool(bool),
@@ -171,6 +180,22 @@ impl Display for ConfigValue {
 }
 
 impl ConfigValue {
+    pub fn get_value_base_type(&self) -> ConfigValueBaseType {
+        match self {
+            ConfigValue::Bool(_) => ConfigValueBaseType::Bool,
+            ConfigValue::Float(_) => ConfigValueBaseType::Float,
+            ConfigValue::Integer(_) => ConfigValueBaseType::Integer,
+            ConfigValue::String(_) => ConfigValueBaseType::String,
+            ConfigValue::Enum { enum_name, .. } => ConfigValueBaseType::Enum(enum_name.to_owned()),
+            ConfigValue::Struct(fields) => {
+                let mut field_types = Vec::new();
+                for field in fields.iter() {
+                    field_types.push(field.get_field_type());
+                }
+                ConfigValueBaseType::Struct(field_types)
+            }
+        }
+    }
     pub fn from_type_and_value(value_type: &ConfigValueType, value: &str) -> Result<Self> {
         Ok(match &value_type.base_type {
             ConfigValueBaseType::Bool => Self::Bool(ConfigValueBaseType::try_parse_bool(value)?),
@@ -225,6 +250,22 @@ impl Display for ConfigVariant {
 }
 
 impl ConfigVariant {
+    pub fn get_value_type(&self) -> ConfigValueType {
+        match &self {
+            ConfigVariant::Scalar(value) => ConfigValueType {
+                quantity: ConfigQuantity::Scalar,
+                base_type: value.get_value_base_type(),
+            },
+            ConfigVariant::Vector(values) => ConfigValueType {
+                quantity: ConfigQuantity::Vector,
+                base_type: if values.is_empty() {
+                    ConfigValueBaseType::String
+                } else {
+                    values[0].get_value_base_type()
+                },
+            },
+        }
+    }
     pub fn from_type_and_value(value_type: &ConfigValueType, value: &str) -> Result<Self> {
         Ok(match value_type.quantity {
             ConfigQuantity::Scalar => {
@@ -345,28 +386,28 @@ impl ConfigValueBaseType {
     }
 }
 
-impl From<&ConfigValue> for ConfigValueBaseType {
-    fn from(value: &ConfigValue) -> Self {
-        match value {
-            ConfigValue::Bool(_) => ConfigValueBaseType::Bool,
-            ConfigValue::Float(_) => ConfigValueBaseType::Float,
-            ConfigValue::Integer(_) => ConfigValueBaseType::Integer,
-            ConfigValue::String(_) => ConfigValueBaseType::String,
-            ConfigValue::Enum { enum_name, .. } => ConfigValueBaseType::Enum(enum_name.to_owned()),
-            ConfigValue::Struct(fields) => {
-                let mut base_fields = Vec::new();
-                for field in fields.iter() {
-                    let base_field = ConfigStructFieldType {
-                        name: field.name.to_owned(),
-                        value_type: field.value.as_ref().into(),
-                    };
-                    base_fields.push(base_field);
-                }
-                ConfigValueBaseType::Struct(base_fields)
-            }
-        }
-    }
-}
+// impl From<&ConfigValue> for ConfigValueBaseType {
+//     fn from(value: &ConfigValue) -> Self {
+//         match value {
+//             ConfigValue::Bool(_) => ConfigValueBaseType::Bool,
+//             ConfigValue::Float(_) => ConfigValueBaseType::Float,
+//             ConfigValue::Integer(_) => ConfigValueBaseType::Integer,
+//             ConfigValue::String(_) => ConfigValueBaseType::String,
+//             ConfigValue::Enum { enum_name, .. } => ConfigValueBaseType::Enum(enum_name.to_owned()),
+//             ConfigValue::Struct(fields) => {
+//                 let mut base_fields = Vec::new();
+//                 for field in fields.iter() {
+//                     let base_field = ConfigStructFieldType {
+//                         name: field.name.to_owned(),
+//                         value_type: field.value.as_ref().into(),
+//                     };
+//                     base_fields.push(base_field);
+//                 }
+//                 ConfigValueBaseType::Struct(base_fields)
+//             }
+//         }
+//     }
+// }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub enum ConfigQuantity {
@@ -409,18 +450,6 @@ pub struct ConfigValueType {
 impl Display for ConfigValueType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}<{}>", self.quantity, self.base_type)
-    }
-}
-
-impl From<&ConfigValue> for ConfigValueType {
-    fn from(_value: &ConfigValue) -> Self {
-        todo!()
-    }
-}
-
-impl From<&ConfigVariant> for ConfigValueType {
-    fn from(_value: &ConfigVariant) -> Self {
-        todo!()
     }
 }
 

@@ -2,15 +2,14 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use static_init::dynamic;
-use tracing::{error, trace};
+use tracing::{error, trace, warn};
 
 use crate::models::{
     config::{
         ConfigMetadata, ConfigQuantity, ConfigValue, ConfigValueBaseType, ConfigValueType,
         ConfigVariant,
     },
-    get_default_app_id, GlobalSettings, ServerSettings,
-    ThemeType,
+    get_default_app_id, GlobalSettings, ServerSettings, ThemeType,
 };
 
 #[dynamic]
@@ -129,11 +128,50 @@ pub fn load_server_settings(
             // Fix up installation path.
             fixup_installation_path(&mut server_settings);
             fixup_enumerations(config_metadata, &mut server_settings);
+
+            // Fix up mismatched config metadata
+            fixup_metadata_mismatches(config_metadata, &mut server_settings);
             result.push(server_settings);
         }
     }
 
     Ok(result)
+}
+
+fn fixup_metadata_mismatches(
+    config_metadata: &ConfigMetadata,
+    server_settings: &mut ServerSettings,
+) {
+    for config_entry in server_settings.config_entries.entries.iter_mut() {
+        if let Some((_, metadata_entry)) =
+            config_metadata.find_entry(&config_entry.meta_name, &config_entry.meta_location)
+        {
+            let config_entry_value_type = config_entry.value.get_value_type();
+            if metadata_entry.value_type != config_entry_value_type {
+                trace!(
+                    "Entry {} ({}) has mismatched type {}, should be {}",
+                    config_entry.meta_name,
+                    config_entry.meta_location,
+                    config_entry_value_type,
+                    metadata_entry.value_type
+                );
+                let str_value = config_entry.value.to_string();
+                if let Ok(variant) =
+                    ConfigVariant::from_type_and_value(&metadata_entry.value_type, &str_value)
+                {
+                    config_entry.value = variant;
+                } else {
+                    warn!("Failed to convert entry");
+                }
+            }
+        } else {
+            trace!(
+                "Skipping entry {} ({})",
+                config_entry.meta_name,
+                config_entry.meta_location
+            );
+        }
+    }
 }
 
 fn fixup_enumerations(config_metadata: &ConfigMetadata, server_settings: &mut ServerSettings) {

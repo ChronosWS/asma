@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.7] - Auto fixup config values with incorrect metadata
+* When possible, if a server's config values have metadata which differs from the 
+  built-in metadata, we will attempt to convert it into the correct format
+
 [0.3.6] - Truncate display of long values in search list
 
 [0.3.5] - Misc UI updates
