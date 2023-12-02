@@ -1,5 +1,7 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.6] - Truncate display of long values in search list
+
 [0.3.5] - Misc UI updates
 * Moved ASA patch notes button to servers area
 * Made server name more prominent in the server card, and the ID less prominent

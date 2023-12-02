@@ -556,17 +556,19 @@ pub(crate) fn make_dialog<'a>(
                             )
                         }
                         let buttons_content = row(buttons_content).spacing(5);
-                        let value = if let Some((_, config_entry)) = server_entry {
-                            config_entry.value.to_string()
-                        } else {
-                            String::new()
-                        };
 
                         let mut entry_main_content: Vec<Element<_>> = Vec::new();
                         entry_main_content.push(text(name.to_owned()).size(16).into());
-                        if !value.is_empty() {
-                            entry_main_content.push(text("=").into());
-                            entry_main_content.push(text(value).into());
+                        if let Some((_, config_entry)) = server_entry {
+                            let value = config_entry.value.to_string();
+                            if !value.is_empty() {
+                                entry_main_content.push(text("=").into());
+                                const MAX_VALUE_LEN: usize = 100;
+                                entry_main_content.push(text(&value[0..value.len().min(MAX_VALUE_LEN)]).width(800).into());
+                                if value.len() >= MAX_VALUE_LEN {
+                                    entry_main_content.push(text("...").size(12).into());
+                                }
+                            }
                         }
                         entry_main_content.push(horizontal_space(Length::Fill).into());
                         entry_main_content.push(text(location.to_string()).size(12).into());
