@@ -18,15 +18,18 @@ use tracing::{error, trace, warn};
 use uuid::Uuid;
 
 use crate::{
+    mod_utils::check_for_mod_updates,
     models::{RunData, RunState},
+    steamapi_utils::check_for_steam_updates,
     update_utils::{check_for_asma_updates, update_asma, AsmaUpdateState},
-    AsyncNotification, steamapi_utils::check_for_steam_updates,
+    AsyncNotification,
 };
 
 pub struct RconMonitorSettings {
     pub address: String,
     pub password: String,
 }
+
 pub enum ServerMonitorCommand {
     AddServer {
         server_id: Uuid,
@@ -42,6 +45,8 @@ pub enum ServerMonitorCommand {
     UpdateAsma,
     CheckForAsmaUpdates,
     CheckForServerUpdates,
+    SetModUpdateRecords(ModUpdateRecords),
+    CheckForModUpdates,
 }
 
 #[derive(Debug, Clone)]
@@ -90,12 +95,25 @@ struct ServerProcessRecord {
     is_stopping: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct ServerModsRecord {
+    pub server_id: Uuid,
+    pub installation_dir: String,
+    pub mod_ids: Vec<i32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModUpdateRecords {
+    pub servers: Vec<ServerModsRecord>,
+}
+
 pub struct MonitorConfig {
     pub app_update_url: Url,
     pub app_update_check_seconds: u64,
     pub steam_api_key: String,
     pub steam_app_id: String,
     pub server_update_check_seconds: u64,
+    pub mods_update_check_seconds: u64,
 }
 
 // Special RCON queries that don't bubble up
@@ -113,12 +131,14 @@ pub async fn monitor_server(
 ) -> Result<()> {
     let mut system = System::default();
     let mut server_records = HashMap::new();
+    let mut mod_update_records = None;
     let mut dead_servers = Vec::new();
     let mut rcon_runner_tasks: JoinSet<Result<()>> = JoinSet::new();
     let mut rcon_responses = Vec::new();
     let mut player_list = Vec::<RconPlayerEntry>::new();
     let mut last_asma_update_check = None;
     let mut last_server_update_check = None;
+    let mut last_mods_update_check = None;
     let player_list_regex = Regex::new("(?<num>[0-9]+). (?<name>[^,]+), (?<userid>[0-9a-f]+)")
         .expect("Failed to compile player list regex");
     loop {
@@ -155,7 +175,6 @@ pub async fn monitor_server(
                                 let rcon_state = if let Some(rcon_settings) = rcon_settings {
                                     let (command_send, command_recv) = channel(100);
                                     let (response_send, response_recv) = channel(100);
-                                    // TODO:
                                     rcon_runner_tasks.spawn(rcon_runner(
                                         server_id.to_owned(),
                                         rcon_settings,
@@ -180,6 +199,7 @@ pub async fn monitor_server(
                                         is_stopping: false,
                                     },
                                 );
+                                last_server_update_check = None;
                             } else {
                                 warn!("Failed to find server process for {} ({}).  This might be OK on startup if the server isn't running", server_id, exe_path.display());
                                 // TODO: These failure path calls could use some cleanup
@@ -258,6 +278,12 @@ pub async fn monitor_server(
                 Ok(Some(ServerMonitorCommand::CheckForServerUpdates)) => {
                     last_server_update_check = None
                 }
+                Ok(Some(ServerMonitorCommand::SetModUpdateRecords(records))) => {
+                    trace!("Mod update records changed");
+                    mod_update_records = Some(records);
+                    last_mods_update_check = None
+                }
+                Ok(Some(ServerMonitorCommand::CheckForModUpdates)) => last_mods_update_check = None,
                 Ok(None) => {
                     trace!("Closing monitor_server channel");
                     return Ok(());
@@ -269,37 +295,30 @@ pub async fn monitor_server(
             }
         }
 
+        // Perform periodic checks
+        let now = Instant::now();
+
         // Check for ASMA updates
-        if let Some(last_checked_time) = last_asma_update_check {
-            let now = Instant::now();
-            if now - last_checked_time
-                > Duration::from_secs(monitor_config.app_update_check_seconds)
-            {
-                let _ = check_for_asma_updates(&status_sender, &monitor_config.app_update_url)
-                    .await
-                    .map_err(|e| {
-                        warn!("Failed to get latest ASMA version info: {}", e.to_string())
-                    });
-                last_asma_update_check = Some(now)
-            }
-        } else {
-            // First boot check
+        if last_asma_update_check
+            .and_then(|t| {
+                Some(now - t > Duration::from_secs(monitor_config.app_update_check_seconds))
+            })
+            .unwrap_or(true)
+        {
             let _ = check_for_asma_updates(&status_sender, &monitor_config.app_update_url)
                 .await
                 .map_err(|e| warn!("Failed to get latest ASMA version info: {}", e.to_string()));
-            last_asma_update_check = Some(Instant::now())
+            last_asma_update_check = Some(now)
         }
 
         // Check for server updates
-        if let Some(last_checked_time) = last_server_update_check {
-            let now = Instant::now();
-            if now - last_checked_time
-                > Duration::from_secs(monitor_config.server_update_check_seconds)
-            {
-                let _ = check_for_steam_updates(
-                    &status_sender,
-                    &monitor_config.steam_app_id,
-                )
+        if last_server_update_check
+            .and_then(|t| {
+                Some(now - t > Duration::from_secs(monitor_config.server_update_check_seconds))
+            })
+            .unwrap_or(true)
+        {
+            let _ = check_for_steam_updates(&status_sender, &monitor_config.steam_app_id)
                 .await
                 .map_err(|e| {
                     warn!(
@@ -307,22 +326,22 @@ pub async fn monitor_server(
                         e.to_string()
                     )
                 });
-                last_server_update_check = Some(now)
+            last_server_update_check = Some(now)
+        }
+
+        // Check for mod updates
+        if let Some(mod_update_records) = &mod_update_records {
+            if last_mods_update_check
+                .and_then(|t| {
+                    Some(now - t > Duration::from_secs(monitor_config.mods_update_check_seconds))
+                })
+                .unwrap_or(true)
+            {
+                let _ = check_for_mod_updates(&status_sender, &mod_update_records)
+                    .await
+                    .map_err(|e| warn!("Failed to get latest mod updates: {}", e.to_string()));
+                last_mods_update_check = Some(now)
             }
-        } else {
-            // First boot check
-            let _ = check_for_steam_updates(
-                &status_sender,
-                &monitor_config.steam_app_id,
-            )
-            .await
-            .map_err(|e| {
-                warn!(
-                    "Failed to get latest server version info: {}",
-                    e.to_string()
-                )
-            });
-            last_server_update_check = Some(Instant::now())
         }
 
         // Check the status of each server now

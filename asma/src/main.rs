@@ -14,6 +14,7 @@ use iced::{
     Subscription, Theme,
 };
 
+use mod_utils::{get_mod_update_records, ServerModsStatuses};
 use models::config::ConfigEntries;
 use reqwest::Url;
 use server::{RconResponse, ServerMonitorCommand, UpdateServerProgress, ValidationResult};
@@ -33,6 +34,7 @@ mod config_utils;
 mod dialogs;
 mod fonts;
 mod icons;
+mod mod_utils;
 mod modal;
 mod models;
 mod network_utils;
@@ -68,6 +70,9 @@ struct Opt {
 
     #[structopt(long, default_value = "900")]
     server_update_check_seconds: u64,
+
+    #[structopt(long, default_value = "900")]
+    mods_update_check_seconds: u64,
 
     #[structopt(long)]
     do_update: bool,
@@ -122,6 +127,21 @@ impl AppState {
             .find(|s| s.settings.id == id)
             .map(|s| &mut s.state)
     }
+
+    pub fn refresh_mod_update_monitoring(&self) -> Command<Message> {
+        let mod_update_records = get_mod_update_records(&self.servers);
+        if let Some(command_channel) = self.monitor_command_channel.to_owned() {
+            Command::perform(
+                send_monitor_command(
+                    command_channel,
+                    ServerMonitorCommand::SetModUpdateRecords(mod_update_records),
+                ),
+                |_| Message::None,
+            )
+        } else {
+            Command::none()
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +150,7 @@ pub enum AsyncNotification {
     UpdateServerProgress(Uuid, UpdateServerProgress),
     UpdateServerRunState(Uuid, RunState),
     AsmaUpdateState(AsmaUpdateState),
+    ServerModsStatuses(ServerModsStatuses),
     SteamAppUpdate(SteamAppVersion),
     RconResponse(Uuid, RconResponse),
 }
@@ -144,6 +165,7 @@ pub enum Message {
     UpdateAsma,
     CheckForAsmaUpdates,
     CheckForServerUpdates,
+    CheckForModUpdates,
 
     // Dialogs
     GlobalSettings(GlobalSettingsMessage),
@@ -250,10 +272,12 @@ impl Application for AppState {
             state: ServerState {
                 install_state: InstallState::Validating,
                 run_state: RunState::NotInstalled,
+                mods_state: Vec::new(),
             },
         })
         .collect::<Vec<_>>();
 
+        // Some things to do on startup
         let mut startup_commands = vec![
             font::load(std::borrow::Cow::from(arial_bytes))
                 .map(|v| Message::FontLoaded(v.map(|_| "Arial".into()))),
@@ -266,6 +290,7 @@ impl Application for AppState {
             }),
         ];
 
+        // The commands which need to be run to validate each existing server
         let mut validation_commands = servers
             .iter()
             .map(|s| {
@@ -311,13 +336,14 @@ impl Application for AppState {
                 global_state: GlobalState {
                     app_version: AsmaVersion::new(env!("CARGO_PKG_VERSION")),
                     app_update_url: opt.app_update_url.to_owned(),
-                    app_update_check_seconds: opt.app_update_check_seconds.min(600),
+                    app_update_check_seconds: opt.app_update_check_seconds.max(600),
                     app_update_state: AsmaUpdateState::CheckingForUpdates,
                     local_ip: LocalIp::Unknown,
                     edit_metadata_id: None,
                     steamcmd_state,
-                    server_update_check_seconds: opt.server_update_check_seconds.min(600),
+                    server_update_check_seconds: opt.server_update_check_seconds.max(600),
                     steam_app_version: SteamAppVersion::default(),
+                    mods_update_check_seconds: opt.mods_update_check_seconds.max(600),
                 },
                 config_metadata_state,
                 config_index,
@@ -413,6 +439,20 @@ impl Application for AppState {
                         send_monitor_command(
                             command_channel,
                             ServerMonitorCommand::CheckForServerUpdates,
+                        ),
+                        |_| Message::None,
+                    )
+                } else {
+                    Command::none()
+                }
+            }
+            Message::CheckForModUpdates => {
+                trace!("CheckForModUpdates");
+                if let Some(command_channel) = self.monitor_command_channel.to_owned() {
+                    Command::perform(
+                        send_monitor_command(
+                            command_channel,
+                            ServerMonitorCommand::CheckForModUpdates,
                         ),
                         |_| Message::None,
                     )
@@ -541,6 +581,7 @@ impl Application for AppState {
                 } else {
                     None
                 };
+
                 let server_state = self
                     .get_server_state_mut(server_id)
                     .expect("Failed to look up server settings");
@@ -549,6 +590,7 @@ impl Application for AppState {
                 // Once we hit the Stopped state, we can stop the process monitor.
                 server_state.run_state = run_state.clone();
                 if let RunState::Starting = run_state {
+                    // Get the mod ids
                     if let Some(command_channel) = self.monitor_command_channel.to_owned() {
                         Command::perform(
                             send_monitor_command(
@@ -784,6 +826,7 @@ impl Application for AppState {
                             server_update_check_seconds: self
                                 .global_state
                                 .server_update_check_seconds,
+                            mods_update_check_seconds: self.global_state.mods_update_check_seconds,
                         },
                         monitor_recv,
                         sender,
@@ -825,6 +868,7 @@ impl Application for AppState {
                     } else {
                         None
                     };
+
                     if let Some(command_channel) = self.monitor_command_channel.to_owned() {
                         Command::perform(
                             send_monitor_command(
@@ -841,6 +885,18 @@ impl Application for AppState {
                         Command::none()
                     }
                 }));
+
+                // Run the mod updates
+                let mod_update_records = get_mod_update_records(&self.servers);
+                if let Some(command_channel) = self.monitor_command_channel.to_owned() {
+                    run_state_commands.push(Command::perform(
+                        send_monitor_command(
+                            command_channel,
+                            ServerMonitorCommand::SetModUpdateRecords(mod_update_records),
+                        ),
+                        |_| Message::None,
+                    ));
+                }
                 Command::batch(run_state_commands)
             }
             Message::AsyncNotification(AsyncNotification::UpdateServerProgress(id, progress)) => {
@@ -894,6 +950,19 @@ impl Application for AppState {
                 self.global_state.steam_app_version = version;
                 Command::none()
             }
+            Message::AsyncNotification(AsyncNotification::ServerModsStatuses(mut statuses)) => {
+                for server in self.servers.iter_mut() {
+                    if let Some(mods_state) = statuses
+                        .server_statuses
+                        .iter_mut()
+                        .find(|s| s.server_id == server.id())
+                    {
+                        server.state.mods_state.clear();
+                        server.state.mods_state.append(&mut mods_state.mod_statuses);
+                    }
+                }
+                Command::none()
+            }
         }
     }
 
@@ -913,6 +982,11 @@ impl Application for AppState {
                         make_button(
                             "Check for updates...",
                             Some(Message::CheckForServerUpdates),
+                            icons::REFRESH.clone()
+                        ),
+                        make_button(
+                            "Check for mod updates...",
+                            Some(Message::CheckForModUpdates),
                             icons::REFRESH.clone()
                         ),
                         make_button(

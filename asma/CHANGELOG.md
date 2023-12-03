@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.8] - Auto check for mod updates
+* We will now automatically check for mod updates and deprecated mods
+
 [0.3.7] - Auto fixup config values with incorrect metadata
 * When possible, if a server's config values have metadata which differs from the 
   built-in metadata, we will attempt to convert it into the correct format

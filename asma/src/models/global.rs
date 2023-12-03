@@ -40,7 +40,8 @@ pub struct GlobalState {
     pub edit_metadata_id: Option<usize>,
     pub steamcmd_state: SteamCmdState,
     pub server_update_check_seconds: u64,
-    pub steam_app_version: SteamAppVersion
+    pub steam_app_version: SteamAppVersion,
+    pub mods_update_check_seconds: u64
 }
 
 pub fn get_default_app_id() -> String {
@@ -53,4 +54,8 @@ pub fn get_patch_notes_url() -> String {
 
 pub fn get_changelog_url() -> String {
     "https://github.com/ChronosWS/asma/blob/master/asma/CHANGELOG.md".into()
+}
+
+pub fn get_default_curseforge_app_id() -> String {
+    "83374".into()
 }

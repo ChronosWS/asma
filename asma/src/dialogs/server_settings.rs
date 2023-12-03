@@ -6,7 +6,7 @@ use iced::{
         column, container, container::Appearance, horizontal_rule, horizontal_space, row,
         scrollable, text, text_input, toggler, Container,
     },
-    Alignment, Background, BorderRadius, Color, Command, Element, Length, Theme,
+    Alignment, Background, BorderRadius, Color, Command, Element, Length, Theme
 };
 use rfd::MessageDialogResult;
 use tracing::{error, info, trace};
@@ -95,15 +95,15 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                 Command::none()
             }
             ServerSettingsMessage::CloseServerSettings(save) => {
-                    if let Some(server) = app_state.servers.get(server_id) {
-                        if save {
-                            save_server_settings_with_error(&app_state.global_settings, &server.settings);
-                        } else if server.settings.installation_location.is_empty() {
-                            app_state.servers.remove(server_id);
-                        }
+                if let Some(server) = app_state.servers.get(server_id) {
+                    if save {
+                        save_server_settings_with_error(&app_state.global_settings, &server.settings);
+                    } else if server.settings.installation_location.is_empty() {
+                        app_state.servers.remove(server_id);
                     }
+                }
                 app_state.mode = MainWindowMode::Servers;
-                Command::none()
+                app_state.refresh_mod_update_monitoring()
             }
             ServerSettingsMessage::SettingsEditor(m) => if let ServerSettingsEditContext::Editing {  editor, .. } = edit_context {
                 editor.update(m)
@@ -129,7 +129,7 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                     app_state.servers.remove(server_id);
                     app_state.mode = MainWindowMode::Servers;
                 }
-                Command::none()
+                app_state.refresh_mod_update_monitoring()
             }
             ServerSettingsMessage::DeleteServer => {
                 if let MessageDialogResult::Ok = rfd::MessageDialog::new()
@@ -154,7 +154,7 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                     app_state.servers.remove(server_id);
                     app_state.mode = MainWindowMode::Servers;
                 }
-                Command::none()
+                app_state.refresh_mod_update_monitoring()
             }
             ServerSettingsMessage::OpenServerInstallationDirectory => {
                 if let Some(server) = app_state.servers.get(server_id) {

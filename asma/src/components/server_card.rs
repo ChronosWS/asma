@@ -1,4 +1,4 @@
-use crate::{icons, models::*, server::UpdateMode, Message};
+use crate::{icons, mod_utils::ModStatus, models::*, server::UpdateMode, Message};
 use iced::{
     widget::{column, container, container::Appearance, horizontal_space, progress_bar, row, text},
     Alignment, Background, BorderRadius, Color, Element, Length, Theme,
@@ -100,37 +100,13 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
         ),
         InstallState::Validating => container(text("Validating install...")),
         InstallState::Installed {
-            version,
-            install_time,
-            time_updated,
             ..
         } => {
-            let needs_update = if time_updated < &global_state.steam_app_version.timeupdated {
-                format!(
-                    " (update available {})",
-                    global_state
-                        .steam_app_version
-                        .timeupdated
-                        .format("%Y-%m-%d %H:%M")
-                )
-            } else {
-                format!(
-                    " (up-to-date {})",
-                    global_state
-                        .steam_app_version
-                        .timeupdated
-                        .format("%Y-%m-%d %H:%M")
-                )
-            };
+            
             container(
                 if let RunState::Stopped = server.state.run_state {
                     row![
-                        text(format!("Version: {}", version)),
-                        text(format!(
-                            "Last Updated: {}{}",
-                            install_time.format("%Y-%m-%d %H:%M"),
-                            needs_update
-                        )),
+                        text("Stopped"),
                         horizontal_space(Length::Fill),
                         make_button(
                             "Update",
@@ -152,12 +128,7 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
                     .padding(5)
                 } else {
                     row![
-                        text(format!("Version: {}", version)),
-                        text(format!(
-                            "Last Updated: {}{}",
-                            install_time.format("%Y-%m-%d %H:%M"),
-                            needs_update
-                        ))
+                        text(server.state.run_state.to_string()),
                     ]
                     .spacing(5)
                     .padding(5)
@@ -186,6 +157,41 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
         _ => row![install_state_content],
     };
 
+    let (version, server_update_message) = if let InstallState::Installed {
+        version,
+        time_updated,
+        ..
+    } = &server.state.install_state
+    {
+        if time_updated < &global_state.steam_app_version.timeupdated {
+            (version.as_str(), "Update Available")
+        } else {
+            (version.as_str(), "Up-to-date")
+        }
+    } else {
+        ("", "Unavailable")
+    };
+
+    let mods_update_message =
+        {
+            let (updated_count, removed_count) = server.state.mods_state.iter().fold(
+                (0usize, 0usize),
+                |(updated, removed), (_, s)| match s {
+                    ModStatus::OutOfDate => (updated + 1, removed),
+                    ModStatus::Removed => (updated, removed + 1),
+                    _ => (updated, removed),
+                },
+            );
+            if updated_count == 0 && removed_count == 0 {
+                "Up-to-date".into()
+            } else if updated_count == 0 {
+                format!("{} retired", removed_count)
+            } else if removed_count == 0 {
+                format!("{} out-of-date", updated_count)
+            } else {
+                format!("{} retired, {} out-of-date", removed_count, updated_count)
+            }
+        };
     container(
         column![
             row![
@@ -195,14 +201,31 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
                 ]
                 .align_items(Alignment::Start),
                 horizontal_space(Length::Fill),
+                column![
+                    row![text("Version:"), text(version), text(server_update_message)]
+                        .spacing(5)
+                        .align_items(Alignment::Center),
+                    row![text("Mods:"), text(mods_update_message)]
+                        .spacing(5)
+                        .align_items(Alignment::Center)
+                ]
+                .align_items(Alignment::Start)
+                .spacing(5),
+                horizontal_space(Length::Fill),
                 make_button(
                     "INIs",
-                    server.settings.get_inis_dir().map(|_| Message::OpenInis(server.settings.id)),
+                    server
+                        .settings
+                        .get_inis_dir()
+                        .map(|_| Message::OpenInis(server.settings.id)),
                     icons::FOLDER_OPEN.clone()
                 ),
                 make_button(
                     "Logs",
-                    server.settings.get_logs_dir().map(|_| Message::OpenLogs(server.settings.id)),
+                    server
+                        .settings
+                        .get_logs_dir()
+                        .map(|_| Message::OpenLogs(server.settings.id)),
                     icons::FOLDER_OPEN.clone()
                 ),
                 make_button(
