@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.11] - Fix issue with ServerAPI servers taking over the console, not detecting properly
+* Servers run with the ServerAPI want their own console so now they get one.  Also we won't kill them
+  when ASMA exits
+
 [0.3.10] - Fix issue with servers not starting
 * Reversed logic was causing servers not using the ServerAPI to use the wrong startup executeable, and vice versa
 * There is still an issue with servers using the ServerAPI taking over the console and doing strange things.

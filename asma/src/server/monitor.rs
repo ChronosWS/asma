@@ -35,7 +35,6 @@ pub enum ServerMonitorCommand {
     AddServer {
         server_id: Uuid,
         installation_dir: String,
-        use_server_api: bool,
         rcon_settings: Option<RconMonitorSettings>,
     },
     StopServer {
@@ -154,17 +153,10 @@ pub async fn monitor_server(
                 Ok(Some(ServerMonitorCommand::AddServer {
                     server_id,
                     installation_dir,
-                    use_server_api,
                     rcon_settings,
                 })) => {
-                    trace!("UseServerApi: {}", use_server_api);
-                    let path = if !use_server_api {
-                        Path::new(&installation_dir)
-                            .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe")
-                    } else {
-                        Path::new(&installation_dir)
-                            .join("ShooterGame/Binaries/Win64/AsaApiLoader.exe")
-                    };
+                    let path = Path::new(&installation_dir)
+                        .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe");
                     if std::fs::metadata(&path).is_ok() {
                         if let Ok(exe_path) = path.canonicalize() {
                             trace!(
@@ -459,7 +451,7 @@ pub async fn monitor_server(
             } else {
                 // Somehow didn't find the process
                 error!(
-                    "Failed to fine process {} ({})",
+                    "Failed to find process {} ({})",
                     record.server_id,
                     record.exe_path.display()
                 );

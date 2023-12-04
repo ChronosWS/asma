@@ -295,6 +295,7 @@ pub async fn start_server(
 ) -> Result<()> {
     let installation_dir = installation_dir.as_ref();
     let exe_path = Path::new(installation_dir);
+    // TODO: Refactor this out, it's shared with the monitor code
     let exe = if use_server_api {
         exe_path.join("ShooterGame/Binaries/Win64/AsaApiLoader.exe")
     } else {
@@ -311,6 +312,10 @@ pub async fn start_server(
     // or run it via a batch file using `start "<profile_descriptor>"` ...
     let mut command = Command::new(exe);
     command.args(args);
+    command.kill_on_drop(false);
+    const DETACHED_PROCESS: u32 = 0x00000008;
+    command.creation_flags(DETACHED_PROCESS);
+    
     let command_string = format!("{:?}", command);
     trace!("Launching server: {}", command_string);
     let child = command

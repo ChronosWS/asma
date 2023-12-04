@@ -608,12 +608,6 @@ impl Application for AppState {
                     .get_server_state_mut(server_id)
                     .expect("Failed to look up server settings");
 
-                let use_server_api = if let ServerApiState::Installed { .. }= &server_state.server_api_state {
-                    true
-                } else {
-                    false   
-                };
-
                 // TODO: If we hit the Starting state, we should start the process monitor for this server.
                 // Once we hit the Stopped state, we can stop the process monitor.
                 server_state.run_state = run_state.clone();
@@ -626,7 +620,6 @@ impl Application for AppState {
                                 ServerMonitorCommand::AddServer {
                                     server_id,
                                     installation_dir,
-                                    use_server_api,
                                     rcon_settings,
                                 },
                             ),
@@ -911,12 +904,6 @@ impl Application for AppState {
                         None
                     };
 
-                    let use_server_api = if let ServerApiState::Installed { .. } = &s.state.server_api_state  {
-                        true
-                    } else {
-                        false
-                    };
-
                     if let Some(command_channel) = self.monitor_command_channel.to_owned() {
                         Command::perform(
                             send_monitor_command(
@@ -924,7 +911,6 @@ impl Application for AppState {
                                 ServerMonitorCommand::AddServer {
                                     server_id,
                                     installation_dir,
-                                    use_server_api,
                                     rcon_settings,
                                 },
                             ),
