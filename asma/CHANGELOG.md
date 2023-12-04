@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.10] - Fix issue with servers not starting
+* Reversed logic was causing servers not using the ServerAPI to use the wrong startup executeable, and vice versa
+* There is still an issue with servers using the ServerAPI taking over the console and doing strange things.
+
 [0.3.9] - Basic support for Server API
 * We now support downloading and updating the [ServerAPI](https://gameservershub.com/forums/resources/ark-survival-ascended-serverapi-crossplay-supported.683/) which allows adding custom plugins to your server. No additional special support for this feature yet.
 

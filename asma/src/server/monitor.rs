@@ -157,7 +157,8 @@ pub async fn monitor_server(
                     use_server_api,
                     rcon_settings,
                 })) => {
-                    let path = if use_server_api {
+                    trace!("UseServerApi: {}", use_server_api);
+                    let path = if !use_server_api {
                         Path::new(&installation_dir)
                             .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe")
                     } else {
