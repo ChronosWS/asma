@@ -1,7 +1,7 @@
 use reqwest::Url;
 use serde::{Serialize, Deserialize};
 
-use crate::{update_utils::{AsmaUpdateState, AsmaVersion}, steamapi_utils::SteamAppVersion};
+use crate::{update_utils::{AsmaUpdateState, StandardVersion}, steamapi_utils::SteamAppVersion, serverapi_utils::ServerApiVersion};
 
 use super::{ThemeType, LocalIp};
 
@@ -32,7 +32,7 @@ pub struct GlobalSettings {
 }
 
 pub struct GlobalState {
-    pub app_version: AsmaVersion,
+    pub app_version: StandardVersion,
     pub app_update_url: Url,
     pub app_update_check_seconds: u64,
     pub app_update_state: AsmaUpdateState,
@@ -41,7 +41,9 @@ pub struct GlobalState {
     pub steamcmd_state: SteamCmdState,
     pub server_update_check_seconds: u64,
     pub steam_app_version: SteamAppVersion,
-    pub mods_update_check_seconds: u64
+    pub mods_update_check_seconds: u64,
+    pub server_api_version: ServerApiVersion,
+    pub server_api_update_check_seconds: u64
 }
 
 pub fn get_default_app_id() -> String {
@@ -54,6 +56,10 @@ pub fn get_patch_notes_url() -> String {
 
 pub fn get_changelog_url() -> String {
     "https://github.com/ChronosWS/asma/blob/master/asma/CHANGELOG.md".into()
+}
+
+pub fn get_server_api_github_url() -> String {
+    "https://api.github.com/repos/ServersHub/ServerAPI/releases".into()
 }
 
 pub fn get_default_curseforge_app_id() -> String {

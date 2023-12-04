@@ -20,6 +20,7 @@ use uuid::Uuid;
 use crate::{
     mod_utils::check_for_mod_updates,
     models::{RunData, RunState},
+    serverapi_utils::check_for_server_api_updates,
     steamapi_utils::check_for_steam_updates,
     update_utils::{check_for_asma_updates, update_asma, AsmaUpdateState},
     AsyncNotification,
@@ -34,6 +35,7 @@ pub enum ServerMonitorCommand {
     AddServer {
         server_id: Uuid,
         installation_dir: String,
+        use_server_api: bool,
         rcon_settings: Option<RconMonitorSettings>,
     },
     StopServer {
@@ -114,6 +116,8 @@ pub struct MonitorConfig {
     pub steam_app_id: String,
     pub server_update_check_seconds: u64,
     pub mods_update_check_seconds: u64,
+    pub server_api_update_url: String,
+    pub server_api_update_check_seconds: u64,
 }
 
 // Special RCON queries that don't bubble up
@@ -139,6 +143,7 @@ pub async fn monitor_server(
     let mut last_asma_update_check = None;
     let mut last_server_update_check = None;
     let mut last_mods_update_check = None;
+    let mut last_server_api_update_check = None;
     let player_list_regex = Regex::new("(?<num>[0-9]+). (?<name>[^,]+), (?<userid>[0-9a-f]+)")
         .expect("Failed to compile player list regex");
     loop {
@@ -149,10 +154,16 @@ pub async fn monitor_server(
                 Ok(Some(ServerMonitorCommand::AddServer {
                     server_id,
                     installation_dir,
+                    use_server_api,
                     rcon_settings,
                 })) => {
-                    let path = Path::new(&installation_dir)
-                        .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe");
+                    let path = if use_server_api {
+                        Path::new(&installation_dir)
+                            .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe")
+                    } else {
+                        Path::new(&installation_dir)
+                            .join("ShooterGame/Binaries/Win64/AsaApiLoader.exe")
+                    };
                     if std::fs::metadata(&path).is_ok() {
                         if let Ok(exe_path) = path.canonicalize() {
                             trace!(
@@ -342,6 +353,20 @@ pub async fn monitor_server(
                     .map_err(|e| warn!("Failed to get latest mod updates: {}", e.to_string()));
                 last_mods_update_check = Some(now)
             }
+        }
+
+        // Check for server api updates
+        if last_server_api_update_check
+            .and_then(|t| {
+                Some(now - t > Duration::from_secs(monitor_config.server_api_update_check_seconds))
+            })
+            .unwrap_or(true)
+        {
+            let _ =
+                check_for_server_api_updates(&status_sender, &monitor_config.server_api_update_url)
+                    .await
+                    .map_err(|e| warn!("Failed to get latest ServerAPI version: {}", e));
+            last_server_api_update_check = Some(now)
         }
 
         // Check the status of each server now

@@ -18,6 +18,7 @@ use mod_utils::{get_mod_update_records, ServerModsStatuses};
 use models::config::ConfigEntries;
 use reqwest::Url;
 use server::{RconResponse, ServerMonitorCommand, UpdateServerProgress, ValidationResult};
+use serverapi_utils::ServerApiVersion;
 use steamapi_utils::SteamAppVersion;
 use steamcmd_utils::validate_steamcmd;
 use structopt::StructOpt;
@@ -39,6 +40,7 @@ mod modal;
 mod models;
 mod network_utils;
 mod server;
+mod serverapi_utils;
 mod settings_utils;
 mod steamapi_utils;
 mod steamcmd_utils;
@@ -46,7 +48,7 @@ mod update_utils;
 
 use modal::Modal;
 use models::*;
-use update_utils::{AsmaUpdateState, AsmaVersion};
+use update_utils::{AsmaUpdateState, StandardVersion};
 use uuid::Uuid;
 
 use crate::models::config::{ConfigLocation, IniFile, IniSection};
@@ -73,6 +75,9 @@ struct Opt {
 
     #[structopt(long, default_value = "900")]
     mods_update_check_seconds: u64,
+
+    #[structopt(long, default_value = "900")]
+    server_api_update_check_seconds: u64,
 
     #[structopt(long)]
     do_update: bool,
@@ -151,6 +156,7 @@ pub enum AsyncNotification {
     UpdateServerRunState(Uuid, RunState),
     AsmaUpdateState(AsmaUpdateState),
     ServerModsStatuses(ServerModsStatuses),
+    ServerApiVersion(ServerApiVersion),
     SteamAppUpdate(SteamAppVersion),
     RconResponse(Uuid, RconResponse),
 }
@@ -185,6 +191,7 @@ pub enum Message {
     StopServer(Uuid),
     KillServer(Uuid),
     ServerRunStateChanged(Uuid, RunState),
+    ServerApiStateChanged(Uuid, ServerApiState),
 
     // Keyboard and Mouse events
     Event(Event),
@@ -273,6 +280,7 @@ impl Application for AppState {
                 install_state: InstallState::Validating,
                 run_state: RunState::NotInstalled,
                 mods_state: Vec::new(),
+                server_api_state: ServerApiState::Disabled,
             },
         })
         .collect::<Vec<_>>();
@@ -334,7 +342,7 @@ impl Application for AppState {
                 server_sender_channel: None,
                 global_settings,
                 global_state: GlobalState {
-                    app_version: AsmaVersion::new(env!("CARGO_PKG_VERSION")),
+                    app_version: StandardVersion::new(env!("CARGO_PKG_VERSION")),
                     app_update_url: opt.app_update_url.to_owned(),
                     app_update_check_seconds: opt.app_update_check_seconds.max(600),
                     app_update_state: AsmaUpdateState::CheckingForUpdates,
@@ -344,6 +352,8 @@ impl Application for AppState {
                     server_update_check_seconds: opt.server_update_check_seconds.max(600),
                     steam_app_version: SteamAppVersion::default(),
                     mods_update_check_seconds: opt.mods_update_check_seconds.max(600),
+                    server_api_version: ServerApiVersion::default(),
+                    server_api_update_check_seconds: opt.server_api_update_check_seconds.max(300),
                 },
                 config_metadata_state,
                 config_index,
@@ -509,6 +519,16 @@ impl Application for AppState {
             }
             Message::StartServer(id) => {
                 trace!("Start Server {}", id);
+                let use_server_api = self
+                    .get_server_state_mut(id)
+                    .map(|s| {
+                        if let ServerApiState::Installed { .. } = &s.server_api_state {
+                            true
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap_or_default();
                 let server_settings = self
                     .get_server_settings(id)
                     .expect("Failed to look up server settings");
@@ -519,12 +539,14 @@ impl Application for AppState {
                 ) {
                     error!("Failed to save ini files: {}", e.to_string());
                 }
+
                 match server::generate_command_line(&self.config_metadata_state, server_settings) {
                     Ok(args) => Command::perform(
                         start_server(
                             id,
                             server_settings.name.clone(),
                             server_settings.installation_location.to_owned(),
+                            use_server_api,
                             args,
                         ),
                         move |res| match res {
@@ -586,6 +608,12 @@ impl Application for AppState {
                     .get_server_state_mut(server_id)
                     .expect("Failed to look up server settings");
 
+                let use_server_api = if let ServerApiState::Installed { .. }= &server_state.server_api_state {
+                    true
+                } else {
+                    false   
+                };
+
                 // TODO: If we hit the Starting state, we should start the process monitor for this server.
                 // Once we hit the Stopped state, we can stop the process monitor.
                 server_state.run_state = run_state.clone();
@@ -598,6 +626,7 @@ impl Application for AppState {
                                 ServerMonitorCommand::AddServer {
                                     server_id,
                                     installation_dir,
+                                    use_server_api,
                                     rcon_settings,
                                 },
                             ),
@@ -609,6 +638,13 @@ impl Application for AppState {
                 } else {
                     Command::none()
                 }
+            }
+            Message::ServerApiStateChanged(server_id, server_api_state) => {
+                trace!("ServerApiStateChanged: {}", server_id);
+                if let Some(server_state) = self.get_server_state_mut(server_id) {
+                    server_state.server_api_state = server_api_state;
+                }
+                Command::none()
             }
             Message::ImportServer => {
                 trace!("Import Server");
@@ -769,6 +805,7 @@ impl Application for AppState {
                     install_time,
                     time_updated,
                     build_id,
+                    server_api_state,
                 },
             ) => {
                 trace!("Server Validated {}: {}", id, version);
@@ -783,6 +820,7 @@ impl Application for AppState {
                         .into(),
                     build_id,
                 };
+                server_state.server_api_state = server_api_state;
                 server_state.run_state = RunState::Stopped;
                 Command::none()
             }
@@ -827,6 +865,10 @@ impl Application for AppState {
                                 .global_state
                                 .server_update_check_seconds,
                             mods_update_check_seconds: self.global_state.mods_update_check_seconds,
+                            server_api_update_url: get_server_api_github_url(),
+                            server_api_update_check_seconds: self
+                                .global_state
+                                .server_api_update_check_seconds,
                         },
                         monitor_recv,
                         sender,
@@ -869,6 +911,12 @@ impl Application for AppState {
                         None
                     };
 
+                    let use_server_api = if let ServerApiState::Installed { .. } = &s.state.server_api_state  {
+                        true
+                    } else {
+                        false
+                    };
+
                     if let Some(command_channel) = self.monitor_command_channel.to_owned() {
                         Command::perform(
                             send_monitor_command(
@@ -876,6 +924,7 @@ impl Application for AppState {
                                 ServerMonitorCommand::AddServer {
                                     server_id,
                                     installation_dir,
+                                    use_server_api,
                                     rcon_settings,
                                 },
                             ),
@@ -948,6 +997,11 @@ impl Application for AppState {
             Message::AsyncNotification(AsyncNotification::SteamAppUpdate(version)) => {
                 trace!("SteamAppUpdate: {:?}", version);
                 self.global_state.steam_app_version = version;
+                Command::none()
+            }
+            Message::AsyncNotification(AsyncNotification::ServerApiVersion(version)) => {
+                trace!("ServerApiVersion: {:?}", version);
+                self.global_state.server_api_version = version;
                 Command::none()
             }
             Message::AsyncNotification(AsyncNotification::ServerModsStatuses(mut statuses)) => {

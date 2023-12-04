@@ -17,10 +17,10 @@ use crate::{
     icons,
     models::{
         config::{ConfigEntries, ConfigEntry, ConfigMetadata},
-        RunState,
+        RunState, ServerApiState
     },
     settings_utils::{remove_server_settings, save_server_settings_with_error},
-    AppState, MainWindowMode, Message,
+    AppState, MainWindowMode, Message, serverapi_utils::install_server_api,
 };
 
 pub enum ServerSettingsEditContext {
@@ -47,6 +47,7 @@ pub enum ServerSettingsMessage {
     ForgetServer,
     DeleteServer,
     ServerSetName(String),
+    InstallServerApi,
     OpenServerInstallationDirectory,
     SetServerInstallationDirectory,
 
@@ -104,6 +105,27 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                 }
                 app_state.mode = MainWindowMode::Servers;
                 app_state.refresh_mod_update_monitoring()
+            }
+            ServerSettingsMessage::InstallServerApi => {
+                if let Some(server) = app_state.servers.get_mut(server_id) {
+                    server.state.server_api_state = ServerApiState::Installing;
+                    let server_id = server.id();
+                    let install_path = server.settings.installation_location.to_owned();
+                    let server_api_version = app_state.global_state.server_api_version.to_owned();
+                    let version = app_state.global_state.server_api_version.version;
+                    Command::perform( 
+                        install_server_api(server_api_version, install_path), move |r| 
+                        match r {
+                            Ok(_) => Message::ServerApiStateChanged(server_id, ServerApiState::Installed { version }),
+                            Err(e) => {
+                                error!("Failed to install ServerApi: {}", e.to_string());
+                                Message::ServerApiStateChanged(server_id, ServerApiState::NotInstalled)
+                            }
+                        }           
+                    )
+                } else {
+                    Command::none()
+                }
             }
             ServerSettingsMessage::SettingsEditor(m) => if let ServerSettingsEditContext::Editing {  editor, .. } = edit_context {
                 editor.update(m)
@@ -704,6 +726,29 @@ pub(crate) fn make_dialog<'a>(
         true
     };
 
+    let can_install_server_api = match &app_state.servers.get(settings_context.server_id).and_then(|s| Some(&s.state.server_api_state)) {
+        Some(ServerApiState::Disabled) => true,
+        Some(ServerApiState::NotInstalled) => true,
+        _ => false
+    };
+
+    let install_server_api_button = match &app_state.servers.get(settings_context.server_id).and_then(|s| Some(&s.state.server_api_state)) {
+        Some(ServerApiState::Installed { version }) => 
+            make_button(
+                "Update ServerApi",
+                (is_not_editing && !server_settings.installation_location.is_empty() && can_install_server_api && app_state.global_state.server_api_version.version > *version)
+                    .then_some(ServerSettingsMessage::InstallServerApi.into()),
+                icons::DOWNLOAD.clone()
+            )
+        ,
+        _ => make_button(
+            "Install ServerApi",
+            (is_not_editing && !server_settings.installation_location.is_empty() && can_install_server_api)
+                .then_some(ServerSettingsMessage::InstallServerApi.into()),
+            icons::DOWNLOAD.clone()
+        )
+    };
+
     container(
         column![
             row![
@@ -760,6 +805,7 @@ pub(crate) fn make_dialog<'a>(
                     icons::FOLDER_OPEN.clone()
                 )
                 .width(100),
+                install_server_api_button.width(200),
                 make_button(
                     "Set Location...",
                     (!server_settings.name.is_empty() && is_not_editing && !is_installed)

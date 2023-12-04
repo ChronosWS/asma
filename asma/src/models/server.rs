@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::config::{ConfigEntries, ConfigLocation, ConfigValue, ConfigVariant};
-use crate::{mod_utils::ModStatus, server::RconPlayerEntry};
+use crate::{mod_utils::ModStatus, server::RconPlayerEntry, update_utils::StandardVersion};
 
 // WARNING: If you add non-Optional values here, you must give them defaults or you
 //          will break manifest loading
@@ -129,10 +129,19 @@ pub enum InstallState {
     FailedValidation(String),
 }
 
+#[derive(Debug, Clone)]
+pub enum ServerApiState {
+    Disabled,
+    NotInstalled,
+    Installing,
+    Installed { version: StandardVersion }
+}
+
 pub struct ServerState {
     pub install_state: InstallState,
     pub run_state: RunState,
     pub mods_state: Vec<(i32, ModStatus)>,
+    pub server_api_state: ServerApiState
 }
 
 impl Default for ServerState {
@@ -141,6 +150,7 @@ impl Default for ServerState {
             install_state: InstallState::NotInstalled,
             run_state: RunState::NotInstalled,
             mods_state: Vec::new(),
+            server_api_state: ServerApiState::Disabled
         }
     }
 }

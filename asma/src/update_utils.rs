@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use rfd::MessageDialogResult;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use tokio::sync::mpsc::Sender;
 use tracing::{error, trace, warn};
@@ -19,7 +19,7 @@ use crate::AsyncNotification;
 #[derive(Debug, Clone)]
 pub enum AsmaUpdateState {
     CheckingForUpdates,
-    AvailableVersion(AsmaVersion),
+    AvailableVersion(StandardVersion),
     Downloading,
     UpdateReady,
     UpdateFailed,
@@ -99,14 +99,15 @@ pub async fn update_asma(
     Ok(())
 }
 
-#[derive(Debug, Clone)]
-pub struct AsmaVersion {
+
+#[derive(Deserialize, Serialize, Default, Debug, Copy, Clone)]
+pub struct StandardVersion {
     major: u16,
     minor: u16,
     revision: u16
 }
 
-impl AsmaVersion {
+impl StandardVersion {
     pub fn new(version_string: &str) -> Self {
         let mut splits = version_string.split('.');
         Self {
@@ -117,19 +118,19 @@ impl AsmaVersion {
     }
 }
 
-impl Display for AsmaVersion {
+impl Display for StandardVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}.{}", self.major, self.minor, self.revision)
     }
 }
 
-impl PartialEq for AsmaVersion {
+impl PartialEq for StandardVersion {
     fn eq(&self, other: &Self) -> bool {
         self.major == other.major && self.minor == other.minor && self.revision == other.revision
     }
 }
 
-impl PartialOrd for AsmaVersion {
+impl PartialOrd for StandardVersion {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match self.major.partial_cmp(&other.major) {
             Some(core::cmp::Ordering::Equal) => {}
@@ -171,7 +172,7 @@ pub async fn check_for_asma_updates(
 
     let _ = status_sender
         .send(AsyncNotification::AsmaUpdateState(
-            AsmaUpdateState::AvailableVersion(AsmaVersion::new(&version.version)),
+            AsmaUpdateState::AvailableVersion(StandardVersion::new(&version.version)),
         ))
         .await;
     Ok(())

@@ -22,8 +22,9 @@ use crate::{
             ConfigLocation, ConfigMetadata, ConfigQuantity, ConfigValue, ConfigValueBaseType,
             ConfigValueType, ConfigVariant, IniFile,
         },
-        ServerSettings,
+        ServerApiState, ServerSettings,
     },
+    serverapi_utils::check_server_api_install_state,
 };
 
 mod monitor;
@@ -289,11 +290,18 @@ pub async fn start_server(
     server_id: Uuid,
     server_name: impl AsRef<str>,
     installation_dir: impl AsRef<str>,
+    use_server_api: bool,
     args: Vec<String>,
 ) -> Result<()> {
     let installation_dir = installation_dir.as_ref();
-    let exe = Path::new(installation_dir)
-        .join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe")
+    let exe_path = Path::new(installation_dir);
+    let exe = if use_server_api {
+        exe_path.join("ShooterGame/Binaries/Win64/AsaApiLoader.exe")
+    } else {
+        exe_path.join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe")
+    };
+
+    let exe = exe
         .canonicalize()
         .expect("Failed to canonicalize path");
 
@@ -777,6 +785,7 @@ pub enum ValidationResult {
         install_time: DateTime<Local>,
         build_id: u64,
         time_updated: u64,
+        server_api_state: ServerApiState,
     },
     Failed(String),
 }
@@ -841,11 +850,16 @@ pub async fn validate_server(
 
     let install_time: DateTime<Local> =
         DateTime::from(metadata.created().with_context(|| "No Creation Time")?);
+
+    // See if ServerApi is installed
+    let server_api_state = check_server_api_install_state(installation_dir);
+
     Ok(ValidationResult::Success {
         version,
         install_time,
         time_updated,
         build_id,
+        server_api_state,
     })
 }
 

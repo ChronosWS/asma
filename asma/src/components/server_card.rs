@@ -1,6 +1,6 @@
 use crate::{icons, mod_utils::ModStatus, models::*, server::UpdateMode, Message};
 use iced::{
-    widget::{column, container, container::Appearance, horizontal_space, progress_bar, row, text},
+    widget::{column, container, container::Appearance, horizontal_space, progress_bar, row, text, horizontal_rule},
     Alignment, Background, BorderRadius, Color, Element, Length, Theme,
 };
 
@@ -25,7 +25,7 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
             icons::START.clone(),
         )),
         RunState::Starting => container(row![
-            text("Starting..."),
+            //text("Starting..."),
             horizontal_space(Length::Fill),
             make_button(
                 "Kill",
@@ -33,7 +33,7 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
                 icons::STOP.clone()
             )
         ]),
-        RunState::Stopping => container(row![text("Stopping..."),].align_items(Alignment::Center)),
+        RunState::Stopping => container(row![/*text("Stopping..."),*/].align_items(Alignment::Center)),
         RunState::Available(run_data) => {
             let (mem, unit) = run_data.get_memory_display();
             container(
@@ -192,6 +192,21 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
                 format!("{} retired, {} out-of-date", removed_count, updated_count)
             }
         };
+
+    let (server_api_version, server_api_update_message) = {
+        match &server.state.server_api_state {
+            ServerApiState::Disabled => (String::default(), "Disabled"),
+            ServerApiState::Installing => (String::default(), "Installing..."),
+            ServerApiState::NotInstalled => (String::default(), "Not Installed"),
+            ServerApiState::Installed { version } => {
+                if global_state.server_api_version.version > *version {
+                    (version.to_string(), "Update Available")
+                } else {
+                    (version.to_string(), "Up-to-date")
+                }
+            }
+        }
+    };
     container(
         column![
             row![
@@ -206,6 +221,9 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
                         .spacing(5)
                         .align_items(Alignment::Center),
                     row![text("Mods:"), text(mods_update_message)]
+                        .spacing(5)
+                        .align_items(Alignment::Center),
+                    row![text("ServerAPI:"), text(server_api_version), text(server_api_update_message)]
                         .spacing(5)
                         .align_items(Alignment::Center)
                 ]
@@ -236,10 +254,12 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
             ]
             .spacing(5)
             .padding(5)
-            .align_items(Alignment::Center),
+            .align_items(Alignment::Start),
+            horizontal_rule(3),
             state_content.align_items(Alignment::Center)
         ]
-        .spacing(5),
+        .spacing(5)
+        .align_items(Alignment::Start),
     )
     .padding(5)
     .style(server_card_style)

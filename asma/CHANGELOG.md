@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.9] - Basic support for Server API
+* We now support downloading and updating the [ServerAPI](https://gameservershub.com/forums/resources/ark-survival-ascended-serverapi-crossplay-supported.683/) which allows adding custom plugins to your server. No additional special support for this feature yet.
+
 [0.3.8] - Auto check for mod updates
 * We will now automatically check for mod updates and deprecated mods
 
