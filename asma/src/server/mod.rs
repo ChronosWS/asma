@@ -578,12 +578,17 @@ pub mod os {
     ) -> Result<()> {
         trace!("SteamCMD: {} {}", steamcmd_exe.display(), args.join(" "));
 
+        // This is due to the fact that conpty runs the command under `cmd.exe` which has weird quoting
+        // rules when there are possibly multiple sets of quote on the line.  This allow us to have spaces
+        // in the SteamCMD path, as well as spaces in the installation path.
+        let steamcmd_string =  steamcmd_exe.to_str().to_owned().unwrap().replace(" ", "^ ");
         let command_line = format!(
-            r#""{}" {}"#,
-            steamcmd_exe.to_str().to_owned().unwrap(),
+            r#"{} {}"#,
+            steamcmd_string,
             args.join(" ")
         );
 
+        trace!("Running SteamCmd: {}", command_line);
         let progress_parser = Regex::new(
             r"Update state \(0x(?<state>[0-9a-fA-F]+)\) (?<desc>[^,]*), progress: (?<percent>[0-9.]+)",
         )

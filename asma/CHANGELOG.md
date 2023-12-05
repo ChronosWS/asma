@@ -1,5 +1,7 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.13] - Another fix for issue where SteamCMD.exe path has spaces in it
+
 [0.3.12] - Fix issue where SteamCMD.exe path has spaces in it
 
 [0.3.11] - Fix issue with ServerAPI servers taking over the console, not detecting properly
