@@ -579,7 +579,7 @@ pub mod os {
         trace!("SteamCMD: {} {}", steamcmd_exe.display(), args.join(" "));
 
         let command_line = format!(
-            "{} {}",
+            r#""{}" {}"#,
             steamcmd_exe.to_str().to_owned().unwrap(),
             args.join(" ")
         );
