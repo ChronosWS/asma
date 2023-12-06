@@ -17,6 +17,7 @@ use iced::{
 use mod_utils::{get_mod_update_records, ServerModsStatuses};
 use models::config::ConfigEntries;
 use reqwest::Url;
+use rfd::{MessageButtons, MessageDialogResult, MessageLevel};
 use server::{RconResponse, ServerMonitorCommand, UpdateServerProgress, ValidationResult};
 use serverapi_utils::ServerApiVersion;
 use steamapi_utils::SteamAppVersion;
@@ -46,17 +47,17 @@ mod steamapi_utils;
 mod steamcmd_utils;
 mod update_utils;
 
-use modal::Modal;
-use models::*;
-use update_utils::{AsmaUpdateState, StandardVersion};
-use uuid::Uuid;
-
 use crate::models::config::{ConfigLocation, IniFile, IniSection};
+use crate::server::import_server_settings;
 use crate::server::{
     monitor_server, os::update_server, start_server, update_inis_from_settings, validate_server,
     MonitorConfig, RconMonitorSettings, UpdateMode,
 };
 use crate::settings_utils::save_server_settings_with_error;
+use modal::Modal;
+use models::*;
+use update_utils::{AsmaUpdateState, StandardVersion};
+use uuid::Uuid;
 
 #[derive(StructOpt)]
 
@@ -645,48 +646,65 @@ impl Application for AppState {
                     .set_title("Select directory")
                     .pick_folder()
                 {
-                    if let Some(name) = folder.file_name() {
-                        let server = Server {
-                            settings: ServerSettings {
-                                id: Uuid::new_v4(),
-                                name: name
-                                    .to_str()
-                                    .expect("Failed to convert file name to string")
-                                    .to_owned(),
-                                installation_location: folder
-                                    .to_str()
-                                    .expect("Failed to convert path to string")
-                                    .to_owned(),
-                                allow_external_ini_management: true,
-                                use_external_rcon: false,
-                                config_entries: ConfigEntries::default(),
-                            },
-                            state: ServerState {
-                                install_state: InstallState::Validating,
-                                ..Default::default()
-                            },
-                        };
-                        let server_id = server.settings.id;
-                        let installation_dir = server.settings.installation_location.to_owned();
-                        let app_id = self.global_settings.app_id.to_owned();
-
-                        warn!("TODO: Import existing INI settings");
-                        save_server_settings_with_error(&self.global_settings, &server.settings);
-                        self.servers.push(server);
-
-                        Command::perform(
-                            validate_server(server_id, installation_dir, app_id),
-                            move |result| {
-                                result
-                                    .map(|r| Message::ServerValidated(server_id, r))
-                                    .unwrap_or_else(|e| {
-                                        Message::ServerValidated(
-                                            server_id,
-                                            ValidationResult::Failed(e.to_string()),
-                                        )
-                                    })
-                            },
+                    let import_ini_settings = match rfd::MessageDialog::new()
+                        .set_title("Let ASMA manage your INIs?")
+                        .set_description(
+                            "ASMA can attempt to import existing settings it knows about \
+                            so they can be freely managed just like a normal server. \n\
+                            Or, ASMA can leave the settings alone and you can manage them \
+                            with an external tool like Beacon or a text editor. \n\
+                            In either case the server will use your existing settings. \n\
+                            Do you want ASMA to import the settings?",
                         )
+                        .set_buttons(MessageButtons::YesNoCancel)
+                        .set_level(MessageLevel::Info)
+                        .show()
+                    {
+                        MessageDialogResult::Yes => Some(true),
+                        MessageDialogResult::No => Some(false),
+                        _ => None,
+                    };
+
+                    if let Some(import_ini_settings) = import_ini_settings {
+                        if let Ok(settings) = import_server_settings(
+                            self.config_metadata_state.effective(),
+                            folder,
+                            import_ini_settings,
+                        ) {
+                            let server = Server {
+                                settings,
+                                state: ServerState {
+                                    install_state: InstallState::Validating,
+                                    ..Default::default()
+                                },
+                            };
+
+                            let server_id = server.settings.id;
+                            let installation_dir = server.settings.installation_location.to_owned();
+                            let app_id = self.global_settings.app_id.to_owned();
+
+                            save_server_settings_with_error(
+                                &self.global_settings,
+                                &server.settings,
+                            );
+                            self.servers.push(server);
+
+                            Command::perform(
+                                validate_server(server_id, installation_dir, app_id),
+                                move |result| {
+                                    result
+                                        .map(|r| Message::ServerValidated(server_id, r))
+                                        .unwrap_or_else(|e| {
+                                            Message::ServerValidated(
+                                                server_id,
+                                                ValidationResult::Failed(e.to_string()),
+                                            )
+                                        })
+                                },
+                            )
+                        } else {
+                            Command::none()
+                        }
                     } else {
                         Command::none()
                     }

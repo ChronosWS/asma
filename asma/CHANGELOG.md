@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.14] - Support full INI import
+* ASMA now will optionally import INI settings when importing an existing server
+* Also fixed a metadata issue with RaidDinoCharacterFoodDrainMultiplier
+
 [0.3.13] - Another fix for issue where SteamCMD.exe path has spaces in it
 
 [0.3.12] - Fix issue where SteamCMD.exe path has spaces in it

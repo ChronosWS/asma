@@ -1,4 +1,7 @@
-use std::{ffi::OsStr, path::Path};
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{bail, Context, Result};
 use ini::Ini;
@@ -11,7 +14,7 @@ use tantivy::{
     schema::{Schema, INDEXED, STORED, TEXT},
     Index, Score,
 };
-use tracing::{trace, warn};
+use tracing::{error, trace, warn};
 
 use crate::{
     models::config::{
@@ -228,6 +231,73 @@ pub fn save_config_metadata(metadata: &ConfigMetadata) -> Result<()> {
     std::fs::File::create(&metadata_path)
         .and_then(|mut f| f.write_all(metadata_json.as_bytes()))
         .with_context(|| format!("Failed to create metadata file {}", metadata_path.display()))
+}
+
+pub(crate) fn import_ini_with_metadata(
+    config_metadata: &ConfigMetadata,
+    ini_path: &PathBuf,
+) -> Result<ConfigEntries> {
+    let ini = Ini::load_from_file(ini_path)?;
+    let file_name = ini_path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .with_context(|| "Failed to map file name to string")?;
+
+    let mut config_entries = ConfigEntries::default();
+
+    for (section, properties) in ini.iter() {
+        let section = section
+            .map(IniSection::from)
+            .unwrap_or(IniSection::Custom(String::new()));
+
+        let location = ConfigLocation::IniOption(file_name.into(), section.to_owned());
+
+        for (key, value) in properties.iter() {
+            if key == "SessionName" {
+                trace!("Key: [{}] Location: [{}] Find: {:?}", key, location, config_metadata.find_entry(key, &location));
+            }
+            if let Some((_, metadata_entry)) = config_metadata.find_entry(key, &location) {
+                match ConfigVariant::from_type_and_value(&metadata_entry.value_type, value) {
+                    Ok(variant) => {
+                        let add_entry = metadata_entry
+                            .default_value
+                            .as_ref()
+                            .and_then(|d| Some(d != &variant))
+                            .unwrap_or(true);
+
+                        if add_entry {
+                            let config_entry = ConfigEntry {
+                                meta_name: metadata_entry.name.to_owned(),
+                                meta_location: metadata_entry.location.to_owned(),
+                                value: variant,
+                            };
+                            trace!(
+                                "OVERRIDE {} [{}]",
+                                config_entry.meta_name,
+                                config_entry.meta_location
+                            );
+                            config_entries.entries.push(config_entry);
+                        } else {
+                            trace!("DEFAULT {} [{}]", key, location);
+                        }
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to convert {} [{}] to a {}, skipping: {}",
+                            key,
+                            section,
+                            metadata_entry.value_type,
+                            e.to_string()
+                        );
+                    }
+                }
+            } else {
+                trace!("UNKNOWN {} [{}]", key, location);
+            }
+        }
+    }
+
+    Ok(config_entries)
 }
 
 pub(crate) fn import_config_file(file: impl AsRef<str>) -> Result<(ConfigMetadata, ConfigEntries)> {

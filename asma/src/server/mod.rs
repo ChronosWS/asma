@@ -1,6 +1,7 @@
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Local};
 use ini::Ini;
+use iter_tools::Itertools;
 use regex::Regex;
 
 use std::{
@@ -16,11 +17,11 @@ use tracing::{error, trace};
 use uuid::Uuid;
 
 use crate::{
-    config_utils::ConfigMetadataState,
+    config_utils::{import_ini_with_metadata, ConfigMetadataState},
     models::{
         config::{
-            ConfigLocation, ConfigMetadata, ConfigQuantity, ConfigValue, ConfigValueBaseType,
-            ConfigValueType, ConfigVariant, IniFile,
+            ConfigEntries, ConfigLocation, ConfigMetadata, ConfigQuantity, ConfigValue,
+            ConfigValueBaseType, ConfigValueType, ConfigVariant, IniFile,
         },
         ServerApiState, ServerSettings,
     },
@@ -44,6 +45,61 @@ pub enum UpdateServerProgress {
     Initializing,
     Downloading(f32),
     Verifying(f32),
+}
+
+pub(crate) fn import_server_settings(
+    config_metadata: &ConfigMetadata,
+    installation_location: PathBuf,
+    import_inis: bool,
+) -> Result<ServerSettings> {
+    let mut config_entries = ConfigEntries::default();
+
+    if import_inis {
+        let mut ini_path = installation_location.join("ShooterGame/Saved/Config/WindowsServer/foo");
+        for file_name in config_metadata
+            .entries
+            .iter()
+            .map(|e| &e.location)
+            .filter_map(|l| {
+                if let ConfigLocation::IniOption(file_name, _) = l {
+                    Some(file_name.clone())
+                } else {
+                    None
+                }
+            })
+            .unique()
+        {
+            ini_path.set_file_name(file_name.to_string());
+            ini_path.set_extension("ini");
+            trace!("Importing from {}", ini_path.display());
+
+            if let Ok(mut imported_config_entries) =
+                import_ini_with_metadata(config_metadata, &ini_path)
+            {
+                config_entries
+                    .entries
+                    .extend(imported_config_entries.entries.drain(..));
+            }
+        }
+    }
+
+    let server_settings = ServerSettings {
+        id: Uuid::new_v4(),
+        name: installation_location
+            .file_name()
+            .expect("Failed to get filename")
+            .to_str()
+            .expect("Failed to convert file name to string")
+            .to_owned(),
+        installation_location: installation_location
+            .to_str()
+            .expect("Failed to convert path to string")
+            .to_owned(),
+        allow_external_ini_management: !import_inis,
+        use_external_rcon: false,
+        config_entries,
+    };
+    Ok(server_settings)
 }
 
 pub fn generate_command_line(
@@ -302,9 +358,7 @@ pub async fn start_server(
         exe_path.join("ShooterGame/Binaries/Win64/ArkAscendedServer.exe")
     };
 
-    let exe = exe
-        .canonicalize()
-        .expect("Failed to canonicalize path");
+    let exe = exe.canonicalize().expect("Failed to canonicalize path");
 
     let _profile_descriptor = format!("\"ASA.{}.{}\"", server_id.to_string(), server_name.as_ref());
 
@@ -315,7 +369,7 @@ pub async fn start_server(
     command.kill_on_drop(false);
     const DETACHED_PROCESS: u32 = 0x00000008;
     command.creation_flags(DETACHED_PROCESS);
-    
+
     let command_string = format!("{:?}", command);
     trace!("Launching server: {}", command_string);
     let child = command

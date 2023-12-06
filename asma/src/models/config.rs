@@ -33,7 +33,7 @@ impl<T: AsRef<str>> From<T> for IniFile {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub enum IniSection {
     // GameUserSettings.ini
     ServerSettings,
@@ -55,7 +55,7 @@ impl Display for IniSection {
             Self::ServerSettings => write!(f, "ServerSettings"),
             Self::SessionSettings => write!(f, "SessionSettings"),
             Self::MultiHome => write!(f, "MultiHome"),
-            Self::ScriptEngineGameSession => write!(f, "/Script/Enging.GameSession"),
+            Self::ScriptEngineGameSession => write!(f, "/Script/Engine.GameSession"),
             Self::Ragnarok => write!(f, "Ragnarok"),
             Self::MessageOfTheDay => write!(f, "MessageOfTheDay"),
             Self::ScriptShooterGameShooterGameMode => {
@@ -72,7 +72,7 @@ impl<T: AsRef<str>> From<T> for IniSection {
         let canonicalized = value.as_ref().to_owned().to_lowercase();
         match canonicalized.as_str() {
             "serversettings" => Self::ServerSettings,
-            "sessionsettings" => Self::ServerSettings,
+            "sessionsettings" => Self::SessionSettings,
             "multihome" => Self::MultiHome,
             "/script/engine.gamesession" => Self::ScriptEngineGameSession,
             "raganarok" => Self::Ragnarok,
@@ -84,7 +84,7 @@ impl<T: AsRef<str>> From<T> for IniSection {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ConfigLocation {
     MapName,
     MapUrlOption,
@@ -103,7 +103,7 @@ impl Display for ConfigLocation {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct ConfigStructFieldVariant {
     pub name: String,
     pub value: ConfigVariant,
@@ -118,7 +118,7 @@ impl ConfigStructFieldVariant {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub enum ConfigValue {
     Bool(bool),
     Float(f32),
@@ -231,7 +231,7 @@ impl ConfigValue {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub enum ConfigVariant {
     Scalar(ConfigValue),
     Vector(Vec<ConfigValue>),
