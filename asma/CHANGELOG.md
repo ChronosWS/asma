@@ -1,5 +1,7 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.17] - Dark mode is moderately more readable now
+
 [0.3.16] - Fixed incorrect formatting for structured data
 * Structures and vectors of structures now no longer get quoted or escaped.
 

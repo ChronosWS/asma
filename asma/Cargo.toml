@@ -1,6 +1,6 @@
 [package]
 name = "asma"
-version = "0.3.16"
+version = "0.3.17"
 authors = ["Cliff Hudson <cliff.s.hudson@gmail.com>"]
 edition = "2021"
 build = "build.rs"
@@ -46,7 +46,8 @@ zip = "0.6.6"
 # UI Framework
 # iced= { version = "0.10.0", features = [ "advanced", "image", "debug", "tokio" ] }
 # iced = { path = "../../iced", features = [ "advanced", "image", "debug", "tokio" ]}
-iced = { git = "https://github.com/ChronosWS/iced.git", branch = "chronosws-winit", features = [ "advanced", "image", "debug", "tokio" ]}
+iced = { git = "https://github.com/ChronosWS/iced.git", branch = "chronosws-winit", features = [ "advanced", "palette", "image", "debug", "tokio" ]}
+palette = "0.7.3"
 # Support for system file dialogs
 rfd = "0.12.1"
 # Search functionality

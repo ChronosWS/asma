@@ -1,20 +1,12 @@
-use crate::{icons, mod_utils::ModStatus, models::*, server::UpdateMode, Message};
+use crate::{
+    icons, mod_utils::ModStatus, models::*, server::UpdateMode, style::card_style, Message,
+};
 use iced::{
-    widget::{column, container, container::Appearance, horizontal_space, progress_bar, row, text, horizontal_rule},
-    Alignment, Background, BorderRadius, Color, Element, Length, Theme,
+    widget::{column, container, horizontal_rule, horizontal_space, progress_bar, row, text},
+    Alignment, Element, Length,
 };
 
 use super::make_button;
-
-fn server_card_style(_theme: &Theme) -> Appearance {
-    Appearance {
-        background: Some(Background::Color(Color::new(0.8, 0.8, 0.8, 1.0))),
-        border_radius: BorderRadius::from(5.0),
-        border_width: 1.0,
-        border_color: Color::BLACK,
-        ..Default::default()
-    }
-}
 
 pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Element<'a, Message> {
     let run_state_content = match &server.state.run_state {
@@ -33,7 +25,9 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
                 icons::STOP.clone()
             )
         ]),
-        RunState::Stopping => container(row![/*text("Stopping..."),*/].align_items(Alignment::Center)),
+        RunState::Stopping => {
+            container(row![/*text("Stopping..."),*/].align_items(Alignment::Center))
+        }
         RunState::Available(run_data) => {
             let (mem, unit) = run_data.get_memory_display();
             container(
@@ -99,43 +93,36 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
             .spacing(5),
         ),
         InstallState::Validating => container(text("Validating install...")),
-        InstallState::Installed {
-            ..
-        } => {
-            
-            container(
-                if let RunState::Stopped = server.state.run_state {
-                    row![
-                        text("Stopped"),
-                        horizontal_space(Length::Fill),
-                        make_button(
-                            "Update",
-                            Some(Message::InstallServer(server.id(), UpdateMode::Update)),
-                            icons::UP.clone(),
-                        ),
-                        make_button(
-                            "Validate",
-                            Some(Message::InstallServer(server.id(), UpdateMode::Validate)),
-                            icons::VALIDATE.clone(),
-                        ),
-                        make_button(
-                            "Start",
-                            Some(Message::StartServer(server.id())),
-                            icons::START.clone(),
-                        )
-                    ]
+        InstallState::Installed { .. } => container(
+            if let RunState::Stopped = server.state.run_state {
+                row![
+                    text("Stopped"),
+                    horizontal_space(Length::Fill),
+                    make_button(
+                        "Update",
+                        Some(Message::InstallServer(server.id(), UpdateMode::Update)),
+                        icons::UP.clone(),
+                    ),
+                    make_button(
+                        "Validate",
+                        Some(Message::InstallServer(server.id(), UpdateMode::Validate)),
+                        icons::VALIDATE.clone(),
+                    ),
+                    make_button(
+                        "Start",
+                        Some(Message::StartServer(server.id())),
+                        icons::START.clone(),
+                    )
+                ]
+                .spacing(5)
+                .padding(5)
+            } else {
+                row![text(server.state.run_state.to_string()),]
                     .spacing(5)
                     .padding(5)
-                } else {
-                    row![
-                        text(server.state.run_state.to_string()),
-                    ]
-                    .spacing(5)
-                    .padding(5)
-                }
-                .align_items(Alignment::Center),
-            )
-        }
+            }
+            .align_items(Alignment::Center),
+        ),
         InstallState::FailedValidation(reason) => container(
             row![
                 text(format!("Validation failed: {}", reason)).width(Length::Fill),
@@ -223,9 +210,13 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
                     row![text("Mods:"), text(mods_update_message)]
                         .spacing(5)
                         .align_items(Alignment::Center),
-                    row![text("ServerAPI:"), text(server_api_version), text(server_api_update_message)]
-                        .spacing(5)
-                        .align_items(Alignment::Center)
+                    row![
+                        text("ServerAPI:"),
+                        text(server_api_version),
+                        text(server_api_update_message)
+                    ]
+                    .spacing(5)
+                    .align_items(Alignment::Center)
                 ]
                 .align_items(Alignment::Start)
                 .spacing(5),
@@ -262,6 +253,6 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
         .align_items(Alignment::Start),
     )
     .padding(5)
-    .style(server_card_style)
+    .style(card_style)
     .into()
 }

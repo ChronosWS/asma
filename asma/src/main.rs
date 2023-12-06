@@ -36,6 +36,7 @@ mod config_utils;
 mod dialogs;
 mod fonts;
 mod icons;
+mod style;
 mod mod_utils;
 mod modal;
 mod models;

@@ -3,10 +3,10 @@ use iced::{
     alignment::Vertical,
     theme,
     widget::{
-        column, container, container::Appearance, horizontal_rule, horizontal_space, row,
+        column, container, horizontal_rule, horizontal_space, row,
         scrollable, text, text_input, toggler, Container,
     },
-    Alignment, Background, BorderRadius, Color, Command, Element, Length, Theme
+    Alignment, Command, Element, Length,
 };
 use rfd::MessageDialogResult;
 use tracing::{error, info, trace};
@@ -20,7 +20,7 @@ use crate::{
         RunState, ServerApiState
     },
     settings_utils::{remove_server_settings, save_server_settings_with_error},
-    AppState, MainWindowMode, Message, serverapi_utils::install_server_api,
+    AppState, MainWindowMode, Message, serverapi_utils::install_server_api, style::card_style,
 };
 
 pub enum ServerSettingsEditContext {
@@ -423,16 +423,6 @@ pub(crate) fn make_dialog<'a>(
         result
     }
 
-    fn server_setting_style(_theme: &Theme) -> Appearance {
-        Appearance {
-            background: Some(Background::Color(Color::new(0.8, 0.8, 0.8, 1.0))),
-            border_radius: BorderRadius::from(5.0),
-            border_width: 1.0,
-            border_color: Color::BLACK,
-            ..Default::default()
-        }
-    }
-
     let editor_content = match &settings_context.edit_context {
         ServerSettingsEditContext::NotEditing { query } => {
             let search_content = {
@@ -614,7 +604,7 @@ pub(crate) fn make_dialog<'a>(
                                 .align_items(Alignment::Center),
                             row(desc_content).padding(5).align_items(Alignment::Center),
                         ])
-                        .style(server_setting_style)
+                        .style(card_style)
                         .into()
                     })
                     .collect::<Vec<Element<_>>>();
