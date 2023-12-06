@@ -1,5 +1,32 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.15] - Fixed or added metadata
+* The following settings have been fixed or updated:
+  * ActiveMods
+  * AdminListURL
+  * AllowCaveBuildingPvE
+  * ClampItemSpoilingTimes
+  * ClampItemStats
+  * ClampResourceHarvestDamage
+  * CustomDynamicConfigUrl
+  * PreventUploadDinos
+  * PreventUploadItems
+  * PreventUploadSurvivors
+  * CraftXPMultiplier
+  * GlobalCorpseDecompositionTimeMultiplier
+  * LayEggIntervalMultiplier
+  * MatingIntervalMultiplier
+  * MatingSpeedMultiplier
+  * PoopIntervalMultiplier
+  * ResourceNoReplenishRadiusPlayers
+  * ResourceNoReplenishRadiusStructures
+  * SpecialXPMultiplier
+  * bAllowUnclaimDinos
+  * bAllowCustomRecipes
+  * bDisableFriendlyFire
+  * bPvEDisableFriendlyFire
+* Thanks @Lacoi!
+
 [0.3.14] - Support full INI import
 * ASMA now will optionally import INI settings when importing an existing server
 * Also fixed a metadata issue with RaidDinoCharacterFoodDrainMultiplier
