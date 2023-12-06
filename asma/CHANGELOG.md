@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.16] - Fixed incorrect formatting for structured data
+* Structures and vectors of structures now no longer get quoted or escaped.
+
 [0.3.15] - Fixed or added metadata
 * The following settings have been fixed or updated:
   * ActiveMods

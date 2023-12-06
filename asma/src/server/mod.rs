@@ -292,7 +292,7 @@ pub fn update_inis_from_settings(
             }
         }) {
             Ok(ini) => {
-                let value = unreal_escaped_value(entry.value.to_string());
+                let value = unreal_escaped_value(&entry.value);
                 trace!(
                     "Setting {}:[{}] {} = {}",
                     file.to_string(),
@@ -324,20 +324,31 @@ pub fn update_inis_from_settings(
 /// Reference: https://docs.unrealengine.com/5.2/en-US/configuration-files-in-unreal-engine/
 /// Note also, `Ini` from the rust-ini crate supports various escaping modes.  We are chosing
 /// the "Do nothing" mode so we retain full control over each value
-fn unreal_escaped_value(value: String) -> String {
-    // Replace \ with \\, and " with \"
-    let value = value.replace(r#"\"#, r#"\\"#).replace(r#"""#, r#"\""#);
+fn unreal_escaped_value(variant: &ConfigVariant) -> String {
+    let value = variant.to_string();
+    match variant {
+        ConfigVariant::Scalar(ConfigValue::Struct(_)) => {
+            value
+        }
+        ConfigVariant::Vector(values) if matches!(values.first(), Some(ConfigValue::Struct(_)))  => {
+            value
+        }
+        _ => {
+            // Replace \ with \\, and " with \"
+            let value = value.replace(r#"\"#, r#"\\"#).replace(r#"""#, r#"\""#);
 
-    // For all non-ascii, possibly special punctuation, just enclose the string in quotes to avoid problems
-    if value.contains(|v| {
-        !((v >= 'a' && v <= 'z')
-            || (v >= 'A' && v <= 'Z')
-            || (v >= '0' && v <= '9')
-            || (v == '.' || v == '/'))
-    }) {
-        format!(r#""{}""#, value)
-    } else {
-        value
+            // For all non-ascii, possibly special punctuation, just enclose the string in quotes to avoid problems
+            if value.contains(|v| {
+                !((v >= 'a' && v <= 'z')
+                    || (v >= 'A' && v <= 'Z')
+                    || (v >= '0' && v <= '9')
+                    || (v == '.' || v == '/'))
+            }) {
+                format!(r#""{}""#, value)
+            } else {
+                value
+            }
+        }
     }
 }
 
@@ -635,12 +646,8 @@ pub mod os {
         // This is due to the fact that conpty runs the command under `cmd.exe` which has weird quoting
         // rules when there are possibly multiple sets of quote on the line.  This allow us to have spaces
         // in the SteamCMD path, as well as spaces in the installation path.
-        let steamcmd_string =  steamcmd_exe.to_str().to_owned().unwrap().replace(" ", "^ ");
-        let command_line = format!(
-            r#"{} {}"#,
-            steamcmd_string,
-            args.join(" ")
-        );
+        let steamcmd_string = steamcmd_exe.to_str().to_owned().unwrap().replace(" ", "^ ");
+        let command_line = format!(r#"{} {}"#, steamcmd_string, args.join(" "));
 
         trace!("Running SteamCmd: {}", command_line);
         let progress_parser = Regex::new(

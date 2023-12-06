@@ -242,8 +242,16 @@ impl Display for ConfigVariant {
         match self {
             Self::Scalar(value) => write!(f, "{}", value),
             Self::Vector(values) => {
-                let values: Vec<String> = values.iter().map(|v| v.to_string()).collect();
-                write!(f, "{}", values.join(","))
+                let inner_values = values
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                if let Some(ConfigValue::Struct(_)) = values.first() {
+                    write!(f, "({})", inner_values)
+                } else {
+                    write!(f, "{}", inner_values)
+                }
             }
         }
     }
