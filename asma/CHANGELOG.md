@@ -1,5 +1,16 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.18] - Fix #50 - Vectors have various serialization modes
+* A new field is added to metadata: `vector_serialization`.  It has the following values:
+  * `CommaSeparated` - The values should all be on one line with commas between them.  
+                       This is the default if not specified.
+  * `Indexed` - The entry appears multiple times with an index after it, such as:
+                `Entry[0]=value`
+                `Entry[1]=value`
+  * `Repeated` - The entry appears multiple times with no index, such as:
+                 `Entry=value`
+                 `Entry=value`
+
 [0.3.17] - Dark mode is moderately more readable now
 
 [0.3.16] - Fixed incorrect formatting for structured data

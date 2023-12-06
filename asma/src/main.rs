@@ -43,10 +43,11 @@ mod utils;
 
 pub use utils::*;
 
+use crate::ini_utils::update_inis_from_settings;
 use crate::models::config::{ConfigLocation, IniFile, IniSection};
 use crate::server::import_server_settings;
 use crate::server::{
-    monitor_server, os::update_server, start_server, update_inis_from_settings, validate_server,
+    monitor_server, os::update_server, start_server, validate_server,
     MonitorConfig, RconMonitorSettings, UpdateMode,
 };
 use crate::settings_utils::save_server_settings_with_error;

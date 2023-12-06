@@ -1,11 +1,9 @@
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Local};
-use ini::Ini;
 use iter_tools::Itertools;
 use regex::Regex;
 
 use std::{
-    collections::HashMap,
     fs::File,
     io::{ErrorKind, Read},
     path::{Path, PathBuf},
@@ -21,7 +19,7 @@ use crate::{
     models::{
         config::{
             ConfigEntries, ConfigLocation, ConfigMetadata, ConfigQuantity, ConfigValue,
-            ConfigValueBaseType, ConfigValueType, ConfigVariant, IniFile,
+            ConfigValueBaseType, ConfigValueType, ConfigVariant,
         },
         ServerApiState, ServerSettings,
     },
@@ -110,7 +108,7 @@ pub fn generate_command_line(
 
     let config_metadata = config_metadata.effective();
     // Map metadata to each entry
-    let settings_meta_map: Vec<_> = server_settings
+    let settings_meta_map = server_settings
         .config_entries
         .entries
         .iter()
@@ -129,9 +127,15 @@ pub fn generate_command_line(
         })
         .filter(|v| v.is_some())
         .map(Option::unwrap)
-        .collect();
+        .collect::<Vec<_>>();
 
     if settings_meta_map.len() < server_settings.config_entries.entries.len() {
+        for entry in server_settings.config_entries.entries.iter() {
+            if settings_meta_map.iter().find(|(c, _)| c.meta_name == entry.meta_name && c.meta_location == entry.meta_location).is_none() {
+                error!("Failed to find metadata for entry {} [{}]", entry.meta_name, entry.meta_location);
+            }
+        }
+
         bail!("One or more config entries did not have a metadata mapping")
     }
 
@@ -197,159 +201,6 @@ pub fn generate_command_line(
     args.extend(switch_params);
 
     Ok(args)
-}
-
-pub fn update_inis_from_settings(
-    config_metadata: &ConfigMetadata,
-    server_settings: &ServerSettings,
-) -> Result<()> {
-    let installation_dir = server_settings.installation_location.to_owned();
-    trace!("Attempting to save INIs to {}", installation_dir);
-
-    let entries_to_remove = config_metadata
-        .entries
-        .iter()
-        .filter(|m| {
-            if let ConfigLocation::IniOption(_, _) = m.location {
-                server_settings
-                    .config_entries
-                    .find(&m.name, &m.location)
-                    .is_none()
-            } else {
-                false
-            }
-        })
-        .map(|e| {
-            if let ConfigLocation::IniOption(file, section) = &e.location {
-                Some((file, section, e))
-            } else {
-                None
-            }
-        })
-        .filter(Option::is_some)
-        .map(Option::unwrap)
-        .collect::<Vec<_>>();
-
-    let settings_to_add = server_settings
-        .config_entries
-        .entries
-        .iter()
-        .map(|e| {
-            if let ConfigLocation::IniOption(file, section) = &e.meta_location {
-                Some((file, section, e))
-            } else {
-                None
-            }
-        })
-        .filter(Option::is_some)
-        .map(Option::unwrap)
-        .collect::<Vec<_>>();
-
-    fn ensure_ini_path(installation_dir: &str, file: &IniFile) -> Result<PathBuf> {
-        let dir_path = Path::new(installation_dir).join("ShooterGame/Saved/Config/WindowsServer");
-        std::fs::create_dir_all(&dir_path)
-            .with_context(|| "Failed creating directory for INI file")?;
-        Ok(dir_path.join(file.to_string()).with_extension("ini"))
-    }
-
-    let mut ini_files = HashMap::new();
-
-    // Remove entries
-    if !server_settings.allow_external_ini_management {
-        for (file, section, entry) in entries_to_remove {
-            let ini_path = ensure_ini_path(&installation_dir, file)?;
-
-            match ini_files.entry(file).or_insert_with(|| {
-                if std::fs::metadata(&ini_path).is_err() {
-                    Ok(Ini::new())
-                } else {
-                    Ini::load_from_file(&ini_path)
-                }
-            }) {
-                Ok(ini) => {
-                    if let Some(_) = ini.delete_from(Some(section.to_string()), &entry.name) {
-                        trace!(
-                            "Removed {}:[{}] {}",
-                            file.to_string(),
-                            section.to_string(),
-                            entry.name,
-                        );
-                    }
-                }
-                Err(e) => bail!("Failed to load ini file: {}", e.to_string()),
-            }
-        }
-    }
-
-    for (file, section, entry) in settings_to_add {
-        let ini_path = ensure_ini_path(&installation_dir, file)?;
-
-        match ini_files.entry(file).or_insert_with(|| {
-            if std::fs::metadata(&ini_path).is_err() {
-                Ok(Ini::new())
-            } else {
-                Ini::load_from_file(&ini_path)
-            }
-        }) {
-            Ok(ini) => {
-                let value = unreal_escaped_value(&entry.value);
-                trace!(
-                    "Setting {}:[{}] {} = {}",
-                    file.to_string(),
-                    section.to_string(),
-                    entry.meta_name,
-                    value
-                );
-                ini.set_to(Some(section.to_string()), entry.meta_name.to_owned(), value);
-            }
-            Err(e) => bail!("Failed to load ini file: {}", e.to_string()),
-        }
-    }
-
-    for (file, ini_result) in ini_files.drain() {
-        if let Ok(ini) = ini_result {
-            let file_name = ensure_ini_path(&installation_dir, file)?;
-            trace!("Writing INI file {}", file_name.display());
-            ini.write_to_file_policy(&file_name, ini::EscapePolicy::Nothing)
-                .with_context(|| format!("Failed to write ini file {}", file_name.display()))?;
-        }
-    }
-
-    Ok(())
-}
-
-/// Creates a value according to the escaping rules for Unreal
-///
-/// Note, this should not be used for structures settings
-/// Reference: https://docs.unrealengine.com/5.2/en-US/configuration-files-in-unreal-engine/
-/// Note also, `Ini` from the rust-ini crate supports various escaping modes.  We are chosing
-/// the "Do nothing" mode so we retain full control over each value
-fn unreal_escaped_value(variant: &ConfigVariant) -> String {
-    let value = variant.to_string();
-    match variant {
-        ConfigVariant::Scalar(ConfigValue::Struct(_)) => {
-            value
-        }
-        ConfigVariant::Vector(values) if matches!(values.first(), Some(ConfigValue::Struct(_)))  => {
-            value
-        }
-        _ => {
-            // Replace \ with \\, and " with \"
-            let value = value.replace(r#"\"#, r#"\\"#).replace(r#"""#, r#"\""#);
-
-            // For all non-ascii, possibly special punctuation, just enclose the string in quotes to avoid problems
-            if value.contains(|v| {
-                !((v >= 'a' && v <= 'z')
-                    || (v >= 'A' && v <= 'Z')
-                    || (v >= '0' && v <= '9')
-                    || (v == '.' || v == '/'))
-            }) {
-                format!(r#""{}""#, value)
-            } else {
-                value
-            }
-        }
-    }
 }
 
 /// Starts the server, returns the PID of the running process
