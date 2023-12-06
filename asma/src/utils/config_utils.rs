@@ -24,7 +24,7 @@ use crate::{
     settings_utils::get_default_global_settings_path,
 };
 
-const BUILT_IN_CONFIG: &str = include_str!("../res/data/default_config_metadata.json");
+const BUILT_IN_CONFIG: &str = include_str!("../../res/data/default_config_metadata.json");
 
 pub struct ConfigMetadataState {
     built_in: ConfigMetadata,

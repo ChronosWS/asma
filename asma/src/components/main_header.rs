@@ -7,9 +7,9 @@ use crate::{
     dialogs::{global_settings::GlobalSettingsMessage, metadata_editor::MetadataEditorMessage},
     icons,
     models::GlobalState,
-    update_utils::AsmaUpdateState,
     Message,
 };
+use crate::utils::update_utils::AsmaUpdateState;
 
 use super::make_button;
 
