@@ -117,23 +117,36 @@ pub fn load_server_settings(
     let mut result = Vec::new();
     for entry in profiles_directory {
         let entry = entry?;
-        if let Ok(json) = std::fs::read_to_string(entry.path()) {
-            let mut server_settings: ServerSettings = serde_json::from_str(&json)?;
-            trace!(
-                "Read profile {} ({})",
-                server_settings.name,
-                server_settings.id
-            );
-
-            // Fix up installation path.
-            fixup_installation_path(&mut server_settings);
-            fixup_enumerations(config_metadata, &mut server_settings);
-
-            // Fix up mismatched config metadata
-            fixup_metadata_mismatches(config_metadata, &mut server_settings);
-            result.push(server_settings);
+        if entry
+            .path()
+            .extension()
+            .and_then(|e| Some(e == "json"))
+            .unwrap_or_default()
+        {
+            if let Ok(json) = std::fs::read_to_string(entry.path()) {
+                match serde_json::from_str::<ServerSettings>(&json) {
+                    Ok(mut server_settings) => {
+                        trace!(
+                            "Read profile {} ({})",
+                            server_settings.name,
+                            server_settings.id
+                        );
+        
+                        // Fix up installation path.
+                        fixup_installation_path(&mut server_settings);
+                        fixup_enumerations(config_metadata, &mut server_settings);
+        
+                        // Fix up mismatched config metadata
+                        fixup_metadata_mismatches(config_metadata, &mut server_settings);
+                        result.push(server_settings);
+                    }
+                    Err(e) => warn!("Couldn't read {} as a profile: {}.  Skipping...", entry.path().display(), e.to_string())
+                }
+            }
         }
     }
+
+    trace!("{} profiles read", result.len());
 
     Ok(result)
 }
