@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use iter_tools::Itertools;
 use regex::Regex;
@@ -11,7 +11,7 @@ use std::{
 };
 use tokio::{process::Command, task::yield_now, time::Instant};
 
-use tracing::{error, trace};
+use tracing::{error, trace, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -132,11 +132,9 @@ pub fn generate_command_line(
     if settings_meta_map.len() < server_settings.config_entries.entries.len() {
         for entry in server_settings.config_entries.entries.iter() {
             if settings_meta_map.iter().find(|(c, _)| c.meta_name == entry.meta_name && c.meta_location == entry.meta_location).is_none() {
-                error!("Failed to find metadata for entry {} [{}]", entry.meta_name, entry.meta_location);
+                warn!("Failed to find metadata for entry {} [{}]. Setting not applied to INI files", entry.meta_name, entry.meta_location);
             }
         }
-
-        bail!("One or more config entries did not have a metadata mapping")
     }
 
     let map = if let Some(map) = settings_meta_map

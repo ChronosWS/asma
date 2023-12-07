@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.21] - Add oldconsole and serverkey setting
+* `-oldconsole` uses the old style console window rather than the new graphical one
+* `-serverkey` is used by ServerAPI to rename the map for plugins
+
 [0.3.20] - Fixed crash when reading profiles when they are not in their own directory
 * If profiles were stored in a directory with other files, we were failing to read
   them and then crashing out.  This makes the loader much more tolerant.
