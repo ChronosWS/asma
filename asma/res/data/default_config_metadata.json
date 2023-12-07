@@ -3910,7 +3910,7 @@
             "description": "Overrides items stack size on a per-item basis.",
             "vector_serialization": "Repeated",
             "value_type": {
-                "quantity": "Scalar",
+                "quantity": "Vector",
                 "base_type": {
                     "Struct": [
                         {
