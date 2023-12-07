@@ -20,6 +20,7 @@
   * PerLevelStatsMultiplier_DinoTamed
   * PerLevelStatsMultiplier_DinoWild
   * PerLevelStatsMultiplier_Player
+* Thanks @Lacoi
 
 [0.3.18] - Fix #50 - Vectors have various serialization modes
 * A new field is added to metadata: `vector_serialization`.  It has the following values:
