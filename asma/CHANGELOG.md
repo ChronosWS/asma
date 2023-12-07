@@ -1,5 +1,26 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.19] - Fixed or added metadata
+* The following settings have been fixed or updated
+  * ConfigAddNPCSpawnEntriesContainer
+  * ConfigSubtractNPCSpawnEntriesContainer
+  * ConfigOverrideNPCSpawnEntriesContainer
+  * DinoSpawnWeightMultipliers
+  * NPCReplacements
+  * DinoClassDamageMultipliers
+  * TamedDinoClassDamageMultipliers
+  * OverrideEngramEntries
+  * OverrideNamedEngramEntries
+  * EngramEntryAutoUnlocks
+  * ConfigOverrideItemCraftingCosts
+  * ConfigOverrideItemMaxQuantity
+  * ConfigOverrideSupplyCrateItems
+  * ItemStatClamps
+  * PlayerBaseStatMultipliers
+  * PerLevelStatsMultiplier_DinoTamed
+  * PerLevelStatsMultiplier_DinoWild
+  * PerLevelStatsMultiplier_Player
+
 [0.3.18] - Fix #50 - Vectors have various serialization modes
 * A new field is added to metadata: `vector_serialization`.  It has the following values:
   * `CommaSeparated` - The values should all be on one line with commas between them.  
