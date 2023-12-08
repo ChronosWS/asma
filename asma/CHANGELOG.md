@@ -1,5 +1,23 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.23] - Additional metadata updates
+* Remove duplicated "OverrideNamedEngramEntries"
+* Fix wrong quantiity type for
+  * ConfigAddNPCSpawnEntriesContainer
+  * ConfigSubtractNPCSpawnEntriesContainer
+  * ConfigOverrideNPCSpawnEntriesContainer
+  * DinoSpawnWeightMultipliers
+  * DinoClassDamageMultipliers
+  * TamedDinoClassDamageMultipliers
+  * OverrideEngramEntries
+  * OverrideNamedEngramEntries
+  * EngramEntryAutoUnlocks
+  * ConfigOverrideItemCraftingCosts
+  * ConfigOverrideItemMaxQuantity
+  * ConfigOverrideSupplyCrateItems
+* Fix wrong value type in "ConfigOverrideItemCraftingCosts"
+* Thanks @Lacoi
+
 [0.3.22] - Fix metadata for ConfigOverrideItemMaxQuantity
 * There was a bug preventing more and one entry from being created
 
