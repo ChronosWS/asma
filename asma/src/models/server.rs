@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::config::{ConfigEntries, ConfigLocation, ConfigValue, ConfigVariant};
-use crate::{mod_utils::ModStatus, server::RconPlayerEntry, update_utils::StandardVersion};
+use crate::{mod_utils::ModStatus, update_utils::StandardVersion};
+use crate::monitor::RconPlayerEntry;
 
 // WARNING: If you add non-Optional values here, you must give them defaults or you
 //          will break manifest loading

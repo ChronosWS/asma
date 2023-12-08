@@ -2,8 +2,7 @@ use std::path::PathBuf;
 
 use crate::{
     models::{get_default_curseforge_app_id, Server},
-    server::{ModUpdateRecords, ServerModsRecord},
-    AsyncNotification,
+    AsyncNotification, monitor::{ModUpdateRecords, ServerModsRecord},
 };
 use anyhow::{Context, Result};
 use curseforge::{prelude::ClientOptions, Client};

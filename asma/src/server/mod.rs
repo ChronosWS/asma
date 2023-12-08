@@ -26,12 +26,6 @@ use crate::{
     serverapi_utils::check_server_api_install_state,
 };
 
-mod monitor;
-
-// TODO: Should refactor this whole module - monitoring especially covers more than just servers
-
-pub use monitor::*;
-
 #[derive(Debug, Clone)]
 pub enum UpdateMode {
     Update,

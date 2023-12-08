@@ -16,9 +16,10 @@ use iced::{
 
 use mod_utils::{get_mod_update_records, ServerModsStatuses};
 use models::config::ConfigEntries;
+use monitor::{ServerMonitorCommand, RconResponse};
 use reqwest::Url;
 use rfd::{MessageButtons, MessageDialogResult, MessageLevel};
-use server::{RconResponse, ServerMonitorCommand, UpdateServerProgress, ValidationResult};
+use server::{UpdateServerProgress, ValidationResult};
 use serverapi_utils::ServerApiVersion;
 use steamapi_utils::SteamAppVersion;
 use steamcmd_utils::validate_steamcmd;
@@ -38,6 +39,7 @@ mod icons;
 mod style;
 mod modal;
 mod models;
+mod monitor;
 mod server;
 mod utils;
 
@@ -45,10 +47,11 @@ pub use utils::*;
 
 use crate::ini_utils::update_inis_from_settings;
 use crate::models::config::{ConfigLocation, IniFile, IniSection};
+use crate::monitor::{RconMonitorSettings, monitor_server, MonitorConfig};
 use crate::server::import_server_settings;
 use crate::server::{
-    monitor_server, os::update_server, start_server, validate_server,
-    MonitorConfig, RconMonitorSettings, UpdateMode,
+    os::update_server, start_server, validate_server,
+    UpdateMode,
 };
 use crate::settings_utils::save_server_settings_with_error;
 use modal::Modal;
