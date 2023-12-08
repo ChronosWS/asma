@@ -6,6 +6,10 @@
                 {
                     "display_name": "The Island",
                     "value": "TheIsland_WP"
+                },
+                {
+                    "display_name": "(Mod) Svartalfheim",
+                    "value": "Svartalfheim_WP"
                 }
             ]
         }

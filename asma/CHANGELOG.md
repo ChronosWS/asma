@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.24] - Svartalfheim map option
+* Temporarily adding this to the main map list until we get full mod-setting support
+
 [0.3.23] - Additional metadata updates
 * Remove duplicated "OverrideNamedEngramEntries"
 * Fix wrong quantiity type for
