@@ -29,7 +29,7 @@ impl Display for LocalIp {
             LocalIp::Unknown => write!(f, "<unknown>"),
             LocalIp::Failed => write!(f, "FAILED"),
             LocalIp::Resolving => write!(f, "Resolving..."),
-            LocalIp::Resolved(ip_addr) => write!(f, "{}", ip_addr.to_string()),
+            LocalIp::Resolved(ip_addr) => write!(f, "{}", ip_addr),
         }
     }
 }

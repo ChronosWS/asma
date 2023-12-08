@@ -213,7 +213,7 @@ pub fn do_update() -> ! {
                     .set_description(format!(
                         "Failed to restart {}: {}. Check the path restart it (also report this issue).",
                         asma_exe_path.display(), 
-                        e.to_string()
+                        e
                     ))
                     .set_level(rfd::MessageLevel::Warning)
                     .set_buttons(rfd::MessageButtons::Ok)

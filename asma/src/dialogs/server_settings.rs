@@ -384,17 +384,9 @@ pub(crate) fn make_dialog<'a>(
     let server_settings = &server.settings;
 
     let is_not_editing =
-        if let ServerSettingsEditContext::NotEditing { .. } = settings_context.edit_context {
-            true
-        } else {
-            false
-        };
+        matches!(settings_context.edit_context, ServerSettingsEditContext::NotEditing { .. });
 
-    let is_stopped = if let RunState::Stopped = &server.state.run_state {
-        true
-    } else {
-        false
-    };
+    let is_stopped = matches!(&server.state.run_state, RunState::Stopped);
 
     fn get_union_of_effective_and_server(
         effective: &ConfigMetadata,
@@ -408,10 +400,8 @@ pub(crate) fn make_dialog<'a>(
         }));
 
         for entry in server.entries.iter() {
-            if result
-                .iter()
-                .find(|e| e.name == entry.meta_name && e.location == entry.meta_location)
-                .is_none()
+            if !result
+                .iter().any(|e| e.name == entry.meta_name && e.location == entry.meta_location)
             {
                 result.push(QueryResult {
                     score: 1.0,
@@ -435,7 +425,7 @@ pub(crate) fn make_dialog<'a>(
                 // we capture and use this data for searching so we aren't re-processing the entire list
                 // of everyting every time a selection changes.
                 // 1. The search results or default mapping
-                let search_results = match query_metadata_index(&app_state.config_index, &query) {
+                let search_results = match query_metadata_index(&app_state.config_index, query) {
                     Ok(results) => results,
                     Err(e) => {
                         error!("Failed to get query results: {}", e.to_string());
@@ -445,7 +435,7 @@ pub(crate) fn make_dialog<'a>(
 
                 let search_results = if search_results.is_empty() {
                     get_union_of_effective_and_server(
-                        &app_state.config_metadata_state.effective(),
+                        app_state.config_metadata_state.effective(),
                         &server_settings.config_entries,
                     )
                 } else {
@@ -707,22 +697,14 @@ pub(crate) fn make_dialog<'a>(
     };
 
     let is_installed = if let Some(server) = app_state.servers.get(settings_context.server_id) {
-        if let crate::models::InstallState::NotInstalled = server.state.install_state {
-            false
-        } else {
-            true
-        }
+        !matches!(server.state.install_state, crate::models::InstallState::NotInstalled)
     } else {
         true
     };
 
-    let can_install_server_api = match &app_state.servers.get(settings_context.server_id).and_then(|s| Some(&s.state.server_api_state)) {
-        Some(ServerApiState::Disabled) => true,
-        Some(ServerApiState::NotInstalled) => true,
-        _ => false
-    };
+    let can_install_server_api = matches!(&app_state.servers.get(settings_context.server_id).map(|s| &s.state.server_api_state), Some(ServerApiState::Disabled) | Some(ServerApiState::NotInstalled));
 
-    let install_server_api_button = match &app_state.servers.get(settings_context.server_id).and_then(|s| Some(&s.state.server_api_state)) {
+    let install_server_api_button = match &app_state.servers.get(settings_context.server_id).map(|s| &s.state.server_api_state) {
         Some(ServerApiState::Installed { version }) => 
             make_button(
                 "Update ServerApi",

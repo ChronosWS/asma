@@ -61,7 +61,7 @@ fn write_version_json(out_dir: &Path) {
     let version = env!("CARGO_PKG_VERSION").to_owned();
 
     serde_json::to_writer(
-        BufWriter::new(File::create(&version_path).expect("Failed to create version file")),
+        BufWriter::new(File::create(version_path).expect("Failed to create version file")),
         &Version { version },
     )
     .expect("Failed to serialize version");

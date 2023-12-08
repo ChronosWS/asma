@@ -42,7 +42,7 @@ struct InstalledMod {
     file_id: i32,
 }
 
-pub fn get_mod_update_records(servers: &Vec<Server>) -> ModUpdateRecords {
+pub fn get_mod_update_records(servers: &[Server]) -> ModUpdateRecords {
     ModUpdateRecords {
         servers: servers
             .iter()
@@ -85,11 +85,8 @@ pub async fn check_for_mod_updates<'a>(
 
         if let Ok(dir_entries) = std::fs::read_dir(&mods_dir) {
             for dir_entry in dir_entries
-                .filter(|e| e.is_ok())
-                .map(|e| e.unwrap())
-                .map(|e| e.file_name().to_str().map(|s| s.to_owned()))
-                .filter(|e| e.is_some())
-                .map(|e| e.unwrap())
+                .filter_map(|e| e.ok())
+                .filter_map(|e| e.file_name().to_str().map(|s| s.to_owned()))
             {
                 let dir_entry = dir_entry.split('_');
                 let installed_mod = dir_entry

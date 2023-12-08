@@ -254,7 +254,12 @@ pub(crate) fn import_ini_with_metadata(
 
         for (key, value) in properties.iter() {
             if key == "SessionName" {
-                trace!("Key: [{}] Location: [{}] Find: {:?}", key, location, config_metadata.find_entry(key, &location));
+                trace!(
+                    "Key: [{}] Location: [{}] Find: {:?}",
+                    key,
+                    location,
+                    config_metadata.find_entry(key, &location)
+                );
             }
             if let Some((_, metadata_entry)) = config_metadata.find_entry(key, &location) {
                 match ConfigVariant::from_type_and_value(&metadata_entry.value_type, value) {
@@ -262,7 +267,7 @@ pub(crate) fn import_ini_with_metadata(
                         let add_entry = metadata_entry
                             .default_value
                             .as_ref()
-                            .and_then(|d| Some(d != &variant))
+                            .map(|d| d != &variant)
                             .unwrap_or(true);
 
                         if add_entry {
@@ -339,9 +344,7 @@ pub(crate) fn import_config_file(file: impl AsRef<str>) -> Result<(ConfigMetadat
                 is_built_in: false,
                 is_deprecated: false,
                 vector_serialization: None,
-                description: format!(
-                    "Auto imported - validate the configuration for this before using it"
-                ),
+                description: "Auto imported - validate the configuration for this before using it".to_string(),
                 value_type: value_type.clone(),
                 default_value: Some(default_value.clone()),
             };
@@ -462,7 +465,7 @@ pub fn query_metadata_index(index: &Index, query: &str) -> Result<Vec<QueryResul
 
     let reader = index.reader()?;
     let searcher = reader.searcher();
-    let mut query_parser = QueryParser::for_index(&index, vec![name, description, location]);
+    let mut query_parser = QueryParser::for_index(index, vec![name, description, location]);
     query_parser.set_field_fuzzy(name, true, 0, false);
     let query = query_parser.parse_query(query)?;
 

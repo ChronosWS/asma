@@ -34,30 +34,26 @@ pub fn update_inis_from_settings(
                 false
             }
         })
-        .map(|e| {
+        .filter_map(|e| {
             if let ConfigLocation::IniOption(file, section) = &e.location {
                 Some((file, section, e))
             } else {
                 None
             }
         })
-        .filter(Option::is_some)
-        .map(Option::unwrap)
         .collect::<Vec<_>>();
 
     let settings_to_add = server_settings
         .config_entries
         .entries
         .iter()
-        .map(|e| {
+        .filter_map(|e| {
             if let ConfigLocation::IniOption(file, section) = &e.meta_location {
                 Some((file, section, e))
             } else {
                 None
             }
         })
-        .filter(Option::is_some)
-        .map(Option::unwrap)
         .collect::<Vec<_>>();
 
     fn ensure_ini_path(installation_dir: &str, file: &IniFile) -> Result<PathBuf> {
@@ -82,7 +78,7 @@ pub fn update_inis_from_settings(
                 }
             }) {
                 Ok(ini) => {
-                    if let Some(_) = ini.delete_from(Some(section.to_string()), &entry.name) {
+                    if ini.delete_from(Some(section.to_string()), &entry.name).is_some() {
                         trace!(
                             "Removed {}:[{}] {}",
                             file.to_string(),
@@ -174,13 +170,20 @@ fn write_to_ini(
                     ini.set_to(Some(section.to_string()), entry.meta_name.to_owned(), value);
                 }
                 VectorSerialization::Indexed => {
+                    #[allow(clippy::unwrap_or_default)]
                     let properties = ini
                         .entry(Some(section.to_string()))
                         .or_insert_with(Default::default);
                     let pattern = format!("{}[", entry.meta_name);
-                    let keys_to_remove = properties.iter().filter(|p| p.0.starts_with(&pattern)).map(|p| p.0.to_owned()).collect::<Vec<_>>();
+                    let keys_to_remove = properties
+                        .iter()
+                        .filter(|p| p.0.starts_with(&pattern))
+                        .map(|p| p.0.to_owned())
+                        .collect::<Vec<_>>();
 
-                    keys_to_remove.iter().for_each(|k| { properties.remove(k); });
+                    keys_to_remove.iter().for_each(|k| {
+                        properties.remove(k);
+                    });
 
                     for (index, value) in values.iter().enumerate() {
                         let value = value.to_string();
@@ -197,11 +200,12 @@ fn write_to_ini(
                     }
                 }
                 VectorSerialization::Repeated => {
+                    #[allow(clippy::unwrap_or_default)]
                     let properties = ini
                         .entry(Some(section.to_string()))
                         .or_insert_with(Default::default);
 
-                    while properties.remove(entry.meta_name.to_owned()).is_some() {}
+                    while properties.remove(&entry.meta_name).is_some() {}
 
                     for value in values.iter() {
                         trace!(
@@ -233,13 +237,13 @@ fn write_to_ini(
 
 fn unreal_escaped_value(value: &str) -> String {
     // Replace \ with \\, and " with \"
-    let value = value.replace(r#"\"#, r#"\\"#).replace(r#"""#, r#"\""#);
+    let value = value.replace('\\', r"\\").replace('"', r#"\""#);
 
     // For all non-ascii, possibly special punctuation, just enclose the string in quotes to avoid problems
-    if value.contains(|v| {
-        !((v >= 'a' && v <= 'z')
-            || (v >= 'A' && v <= 'Z')
-            || (v >= '0' && v <= '9')
+    if value.contains(|v: char| {
+        !(v.is_ascii_lowercase()
+            || v.is_ascii_uppercase()
+            || v.is_ascii_digit()
             || (v == '.' || v == '/'))
     }) {
         format!(r#""{}""#, value)

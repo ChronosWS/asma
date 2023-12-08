@@ -53,7 +53,7 @@ pub(crate) fn update(app_state: &mut AppState, message: GlobalSettingsMessage) -
         GlobalSettingsMessage::UpdateSteamCmd => {
             app_state.global_state.steamcmd_state = SteamCmdState::Installing;
             Command::perform(
-                get_steamcmd(app_state.global_settings.steamcmd_directory.to_owned()),
+                get_steamcmd(app_state.global_settings.steamcmd_directory.clone()),
                 |result| {
                     if let Ok(true) = result {
                         GlobalSettingsMessage::SteamCmdUpdated.into()
@@ -156,7 +156,7 @@ pub(crate) fn update(app_state: &mut AppState, message: GlobalSettingsMessage) -
     }
 }
 
-pub(crate) fn make_dialog<'a>(app_state: &AppState) -> Container<Message> {
+pub(crate) fn make_dialog(app_state: &AppState) -> Container<Message> {
     let steamcmd_container = match &app_state.global_state.steamcmd_state {
         SteamCmdState::Installed | SteamCmdState::NotInstalled => row![
             make_button(
@@ -197,10 +197,7 @@ pub(crate) fn make_dialog<'a>(app_state: &AppState) -> Container<Message> {
                 text("Light"),
                 toggler(
                     String::new(),
-                    match app_state.global_settings.theme {
-                        ThemeType::Light => false,
-                        _ => true,
-                    },
+                    !matches!(app_state.global_settings.theme, ThemeType::Light),
                     |v| GlobalSettingsMessage::ThemeToggled(v).into()
                 )
                 .width(Length::Shrink),

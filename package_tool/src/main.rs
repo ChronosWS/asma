@@ -92,8 +92,8 @@ fn upload_to_s3(
     version: Version,
     aws_path: &Url,
     aws_profile: &str,
-    version_path: &PathBuf,
-    asma_zip_path: &PathBuf,
+    version_path: &Path,
+    asma_zip_path: &Path,
 ) -> Result<()> {
     let target_platform = if target_platform.is_empty() {
         target_platform
@@ -124,10 +124,9 @@ fn upload_to_s3(
             "s3",
             "cp",
             asma_zip_path
-                .as_path()
                 .to_str()
                 .expect("Failed to stringify asma_zip_path"),
-            &asma_zip_url.to_string(),
+            asma_zip_url.as_ref(),
             "--profile",
             aws_profile,
         ],
@@ -139,8 +138,8 @@ fn upload_to_s3(
         [
             "s3",
             "cp",
-            &asma_zip_url.to_string(),
-            &asma_versioned_zip_url.to_string(),
+            asma_zip_url.as_ref(),
+            asma_versioned_zip_url.as_ref(),
             "--profile",
             aws_profile,
         ],
@@ -161,10 +160,9 @@ fn upload_to_s3(
             "s3",
             "cp",
             version_path
-                .as_path()
                 .to_str()
                 .expect("Failed to stringify version_path"),
-            &version_json_url.to_string(),
+            version_json_url.as_ref(),
             "--profile",
             aws_profile,
         ],
@@ -230,7 +228,7 @@ fn zip_asma(path: &PathBuf) -> Result<PathBuf> {
 
     // Write to zip file prospectively
     println!("Writing...");
-    std::fs::write(&asma_zip_path, &write_buf).unwrap();
+    std::fs::write(&asma_zip_path, write_buf).unwrap();
 
     // Read back from the buffer to verify
     println!("Verifying...");

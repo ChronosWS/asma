@@ -660,7 +660,7 @@ impl SettingEditor {
                     ConfigValueBaseType::Enum(enum_name),
                     EditorValue::Value(ConfigValue::Enum { value, .. }),
                 ) => self.make_enum_editor(
-                    &enum_name,
+                    enum_name,
                     value,
                     metadata,
                     move |c| SettingEditorMessage::Edit(field_path.to_owned(), c),
@@ -752,7 +752,7 @@ enum StructuredContext2<'a> {
     },
 }
 
-pub fn editor_for<'a>(value_type: ConfigValueType, value: ConfigVariant) -> SettingEditor {
+pub fn editor_for(value_type: ConfigValueType, value: ConfigVariant) -> SettingEditor {
     SettingEditor {
         interim_values: HashMap::default(),
         value_type,

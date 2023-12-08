@@ -70,7 +70,7 @@ pub(crate) fn import_server_settings(
             {
                 config_entries
                     .entries
-                    .extend(imported_config_entries.entries.drain(..));
+                    .append(&mut imported_config_entries.entries);
             }
         }
     }
@@ -106,7 +106,7 @@ pub fn generate_command_line(
         .config_entries
         .entries
         .iter()
-        .map(|e| {
+        .filter_map(|e| {
             config_metadata
                 .find_entry(&e.meta_name, &e.meta_location)
                 .and_then(|(_, m)| {
@@ -119,14 +119,17 @@ pub fn generate_command_line(
                     })
                 })
         })
-        .filter(|v| v.is_some())
-        .map(Option::unwrap)
         .collect::<Vec<_>>();
 
     if settings_meta_map.len() < server_settings.config_entries.entries.len() {
         for entry in server_settings.config_entries.entries.iter() {
-            if settings_meta_map.iter().find(|(c, _)| c.meta_name == entry.meta_name && c.meta_location == entry.meta_location).is_none() {
-                warn!("Failed to find metadata for entry {} [{}]. Setting not applied to INI files", entry.meta_name, entry.meta_location);
+            if !settings_meta_map.iter().any(|(c, _)| {
+                c.meta_name == entry.meta_name && c.meta_location == entry.meta_location
+            }) {
+                warn!(
+                    "Failed to find metadata for entry {} [{}]. Setting not applied to INI files",
+                    entry.meta_name, entry.meta_location
+                );
             }
         }
     }
@@ -152,7 +155,7 @@ pub fn generate_command_line(
     let url_params = settings_meta_map
         .iter()
         .filter(|(e, _)| e.meta_location == ConfigLocation::MapUrlOption)
-        .map(|(e, _)| format!("{}={}", e.meta_name, e.value.to_string()))
+        .map(|(e, _)| format!("{}={}", e.meta_name, e.value))
         .collect::<Vec<_>>()
         .join("?");
 
@@ -179,15 +182,14 @@ pub fn generate_command_line(
                     String::new()
                 }
             } else {
-                format!("-{}={}", e.meta_name, e.value.to_string())
+                format!("-{}={}", e.meta_name, e.value)
             }
-        })
-        .map(|s| s.into());
+        });
 
     if url_params.is_empty() {
         args.push(map.to_owned());
     } else {
-        args.push(format!("{}?{}", map, url_params).into());
+        args.push(format!("{}?{}", map, url_params));
     }
 
     args.extend(switch_params);
@@ -214,7 +216,7 @@ pub async fn start_server(
 
     let exe = exe.canonicalize().expect("Failed to canonicalize path");
 
-    let _profile_descriptor = format!("\"ASA.{}.{}\"", server_id.to_string(), server_name.as_ref());
+    let _profile_descriptor = format!("\"ASA.{}.{}\"", server_id, server_name.as_ref());
 
     // If we want to tag the process with metadata, we either need to force set the title after launch,
     // or run it via a batch file using `start "<profile_descriptor>"` ...
@@ -489,7 +491,7 @@ pub mod os {
         // This is due to the fact that conpty runs the command under `cmd.exe` which has weird quoting
         // rules when there are possibly multiple sets of quote on the line.  This allow us to have spaces
         // in the SteamCMD path, as well as spaces in the installation path.
-        let steamcmd_string = steamcmd_exe.to_str().to_owned().unwrap().replace(" ", "^ ");
+        let steamcmd_string = steamcmd_exe.to_str().to_owned().unwrap().replace(' ', "^ ");
         let command_line = format!(r#"{} {}"#, steamcmd_string, args.join(" "));
 
         trace!("Running SteamCmd: {}", command_line);
@@ -503,8 +505,8 @@ pub mod os {
             UpdateServerProgress::Initializing,
         ));
 
-        let mut process =
-            conpty::spawn(&command_line).expect(&format!("Failed to spawn {}", command_line));
+        let mut process = conpty::spawn(&command_line)
+            .unwrap_or_else(|_| panic!("Failed to spawn {}", command_line));
 
         let mut output = process.output().expect("Failed to get output pipe");
         output.blocking(false);
@@ -517,7 +519,7 @@ pub mod os {
                 Ok(bytes_read) => {
                     if bytes_read > 0 {
                         let buf_as_str = std::str::from_utf8(&buf[0..bytes_read]).unwrap();
-                        if let Some(index) = buf_as_str.find("\r") {
+                        if let Some(index) = buf_as_str.find('\r') {
                             // Push the rest of this line
                             line_buf.push_str(&buf_as_str[0..index]);
                             process_steamcmd_line(
@@ -567,7 +569,7 @@ pub mod os {
         progress_parser: &Regex,
         progress: &Sender<AsyncNotification>,
     ) {
-        if let Some(captures) = progress_parser.captures(&line) {
+        if let Some(captures) = progress_parser.captures(line) {
             if captures.len() == 4 {
                 let state = captures.name("state").expect("Failed to get state");
                 let desc = captures.name("desc").expect("Failed to get desc");
@@ -787,5 +789,5 @@ fn extract_app_state_field<'a>(content: &'a str, field: &str) -> Option<&'a str>
     regex
         .captures(content)
         .and_then(|c| c.name("value"))
-        .and_then(|m| Some(m.as_str()))
+        .map(|m| m.as_str())
 }

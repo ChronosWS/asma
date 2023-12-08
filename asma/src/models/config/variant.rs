@@ -225,6 +225,6 @@ impl ConfigVariant {
 
 impl AsRef<ConfigVariant> for ConfigVariant {
     fn as_ref(&self) -> &ConfigVariant {
-        &self
+        self
     }
 }

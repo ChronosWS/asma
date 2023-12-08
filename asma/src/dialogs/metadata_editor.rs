@@ -72,7 +72,7 @@ pub(crate) fn update(app_state: &mut AppState, message: MetadataEditorMessage) -
         MetadataEditorMessage::CloseMetadataEditor => {
             trace!("Close Metadata Editor");
 
-            save_config_metadata(&app_state.config_metadata_state.user())
+            save_config_metadata(app_state.config_metadata_state.user())
                 .unwrap_or_else(|e| error!("Failed to save config metadata: {}", e.to_string()));
             app_state.mode = MainWindowMode::Servers;
 
@@ -451,7 +451,7 @@ pub(crate) fn make_dialog<'a>(
                                 .default_value
                                 .as_ref()
                                 .map(|v| v.to_string())
-                                .unwrap_or_else(|| String::new())
+                                .unwrap_or_else(String::new)
                         )
                         .on_input(|v| MetadataEditorMessage::ValueChanged(
                             *metadata_id,
@@ -466,7 +466,7 @@ pub(crate) fn make_dialog<'a>(
             }
             MetadataEditContext::NotEditing { query } => {
                 let search_content =
-                    match query_metadata_index(&app_state.config_index, &query) {
+                    match query_metadata_index(&app_state.config_index, query) {
                         Ok(results) => {
                             if !results.is_empty() {
                                 trace!("Results: {}", results.len());

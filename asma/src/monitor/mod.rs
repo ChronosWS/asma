@@ -12,7 +12,7 @@ use sysinfo::{Pid, PidExt, ProcessExt, ProcessStatus, System, SystemExt};
 use tokio::{
     sync::mpsc::{channel, error::TryRecvError, Receiver, Sender},
     task::JoinSet,
-    time::{sleep, timeout, Instant},
+    time::{timeout, Instant},
 };
 use tracing::{error, trace, warn};
 use uuid::Uuid;
@@ -303,10 +303,7 @@ pub async fn monitor_server(
         let now = Instant::now();
 
         // Check for ASMA updates
-        if last_asma_update_check
-            .and_then(|t| {
-                Some(now - t > Duration::from_secs(monitor_config.app_update_check_seconds))
-            })
+        if last_asma_update_check.map(|t| now - t > Duration::from_secs(monitor_config.app_update_check_seconds))
             .unwrap_or(true)
         {
             let _ = check_for_asma_updates(&status_sender, &monitor_config.app_update_url)
@@ -316,10 +313,7 @@ pub async fn monitor_server(
         }
 
         // Check for server updates
-        if last_server_update_check
-            .and_then(|t| {
-                Some(now - t > Duration::from_secs(monitor_config.server_update_check_seconds))
-            })
+        if last_server_update_check.map(|t| now - t > Duration::from_secs(monitor_config.server_update_check_seconds))
             .unwrap_or(true)
         {
             let _ = check_for_steam_updates(&status_sender, &monitor_config.steam_app_id)
@@ -335,13 +329,10 @@ pub async fn monitor_server(
 
         // Check for mod updates
         if let Some(mod_update_records) = &mod_update_records {
-            if last_mods_update_check
-                .and_then(|t| {
-                    Some(now - t > Duration::from_secs(monitor_config.mods_update_check_seconds))
-                })
+            if last_mods_update_check.map(|t| now - t > Duration::from_secs(monitor_config.mods_update_check_seconds))
                 .unwrap_or(true)
             {
-                let _ = check_for_mod_updates(&status_sender, &mod_update_records)
+                let _ = check_for_mod_updates(&status_sender, mod_update_records)
                     .await
                     .map_err(|e| warn!("Failed to get latest mod updates: {}", e.to_string()));
                 last_mods_update_check = Some(now)
@@ -349,10 +340,7 @@ pub async fn monitor_server(
         }
 
         // Check for server api updates
-        if last_server_api_update_check
-            .and_then(|t| {
-                Some(now - t > Duration::from_secs(monitor_config.server_api_update_check_seconds))
-            })
+        if last_server_api_update_check.map(|t| now - t > Duration::from_secs(monitor_config.server_api_update_check_seconds))
             .unwrap_or(true)
         {
             let _ =
@@ -400,11 +388,7 @@ pub async fn monitor_server(
                 EXEC_LIST_PLAYERS_COMMAND,
             )
             .await;
-            let rcon_enabled = if let Some(RconState::Connected { .. }) = &record.rcon_state {
-                true
-            } else {
-                false
-            };
+            let rcon_enabled = matches!(&record.rcon_state, Some(RconState::Connected { .. }));
 
             let process_exists = system.refresh_process(record.pid);
             if !process_exists {
@@ -464,9 +448,6 @@ pub async fn monitor_server(
             trace!("Monitor: Removing dead server {}", server_id);
             server_records.remove(&server_id);
         });
-
-        // trace!("Monitor: Sleeping...");
-        sleep(Duration::from_secs(5)).await;
     }
 }
 

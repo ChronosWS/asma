@@ -120,7 +120,7 @@ pub fn load_server_settings(
         if entry
             .path()
             .extension()
-            .and_then(|e| Some(e == "json"))
+            .map(|e| e == "json")
             .unwrap_or_default()
         {
             if let Ok(json) = std::fs::read_to_string(entry.path()) {
@@ -131,16 +131,20 @@ pub fn load_server_settings(
                             server_settings.name,
                             server_settings.id
                         );
-        
+
                         // Fix up installation path.
                         fixup_installation_path(&mut server_settings);
                         fixup_enumerations(config_metadata, &mut server_settings);
-        
+
                         // Fix up mismatched config metadata
                         fixup_metadata_mismatches(config_metadata, &mut server_settings);
                         result.push(server_settings);
                     }
-                    Err(e) => warn!("Couldn't read {} as a profile: {}.  Skipping...", entry.path().display(), e.to_string())
+                    Err(e) => warn!(
+                        "Couldn't read {} as a profile: {}.  Skipping...",
+                        entry.path().display(),
+                        e.to_string()
+                    ),
                 }
             }
         }
@@ -211,11 +215,10 @@ fn fixup_enumerations(config_metadata: &ConfigMetadata, server_settings: &mut Se
 
 fn fixup_installation_path(server_settings: &mut ServerSettings) {
     let mut installation_location = PathBuf::from(&server_settings.installation_location);
-    if installation_location.ends_with(&server_settings.id.to_string()) {
-        // Already fixed up
-    } else if installation_location.ends_with(&server_settings.name) {
-        // New style
-    } else {
+    if !(installation_location.ends_with(server_settings.id.to_string()) || // Already fixed up
+        installation_location.ends_with(&server_settings.name))
+    // New style
+    {
         // Fix up
         installation_location.push(server_settings.id.to_string())
     }
@@ -244,7 +247,7 @@ pub fn remove_server_settings(
     server_settings: &ServerSettings,
 ) -> Result<()> {
     let server_file = Path::new(&global_settings.profiles_directory)
-        .join(format!("{}.json", server_settings.id.to_string()));
+        .join(format!("{}.json", server_settings.id));
     std::fs::remove_file(server_file).with_context(|| "Failed to remove server settings file")
 }
 
@@ -253,7 +256,7 @@ pub fn save_server_settings(
     server_settings: &ServerSettings,
 ) -> Result<()> {
     let server_file = Path::new(&global_settings.profiles_directory)
-        .join(format!("{}.json", server_settings.id.to_string()));
+        .join(format!("{}.json", server_settings.id));
     trace!(
         "Save profile {} ({}) to {:?}",
         server_settings.name,

@@ -4,7 +4,7 @@ pub async fn refresh_ip() -> Result<IpAddr, ()> {
     let mut response = reqwest::get("https://api.ipify.org").await.map_err(|e| {
         eprintln!(
             "Error requesting IP from https://api.ipify.org: {}",
-            e.to_string()
+            e
         )
     });
 
@@ -14,7 +14,7 @@ pub async fn refresh_ip() -> Result<IpAddr, ()> {
             .map_err(|e| {
                 eprintln!(
                     "Error requesting IP from http://whatismyip.akamai.com: {}",
-                    e.to_string()
+                    e
                 )
             })
     }
@@ -23,13 +23,13 @@ pub async fn refresh_ip() -> Result<IpAddr, ()> {
         if let Ok(text) = response
             .text()
             .await
-            .map_err(|e| eprintln!("Failed to get response value: {}", e.to_string()))
+            .map_err(|e| eprintln!("Failed to get response value: {}", e))
         {
             return text.parse::<IpAddr>().map_err(|e| {
                 eprintln!(
                     "Failed to parse IP address from response '{}': {}",
                     text,
-                    e.to_string()
+                    e
                 )
             });
         }
