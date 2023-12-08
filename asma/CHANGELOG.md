@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.22] - Fix metadata for ConfigOverrideItemMaxQuantity
+* There was a bug preventing more and one entry from being created
+
 [0.3.21] - Add oldconsole and serverkey setting
 * `-oldconsole` uses the old style console window rather than the new graphical one
 * `-serverkey` is used by ServerAPI to rename the map for plugins
