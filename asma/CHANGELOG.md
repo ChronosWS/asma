@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.25] - Add various IP options
+* `MULTIHOME` for allowing multi-homed servers
+* `ip` and `ServerIP` which are supported on Nitrado.  Undocumented.
+
 [0.3.24] - Svartalfheim map option
 * Temporarily adding this to the main map list until we get full mod-setting support
 
