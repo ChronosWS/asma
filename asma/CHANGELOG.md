@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.26] - Favorite settings enabled
+* The checkbox on the right side of a setting lets you mark it as a favorite, so it will always
+  show up at the top of the list
+
 [0.3.25] - Add various IP options
 * `MULTIHOME` for allowing multi-homed servers
 * `ip` and `ServerIP` which are supported on Nitrado.  Undocumented.

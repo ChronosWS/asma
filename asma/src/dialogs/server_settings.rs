@@ -4,7 +4,7 @@ use iced::{
     theme,
     widget::{
         column, container, horizontal_rule, horizontal_space, row,
-        scrollable, text, text_input, toggler, Container,
+        scrollable, text, text_input, toggler, Container, checkbox,
     },
     Alignment, Command, Element, Length,
 };
@@ -80,6 +80,10 @@ pub enum ServerSettingsMessage {
     ValueChanged {
         setting_id: usize,
         value: String,
+    },
+    SetFavorite {
+        setting_id: usize,
+        value: bool
     },
     ExternalIniManagementToggled(bool),
     UseExternalRconToggled(bool),
@@ -347,6 +351,20 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                 }
                 Command::none()
             }
+            ServerSettingsMessage::SetFavorite { setting_id, value } => {
+                let server = app_state
+                    .servers
+                    .get_mut(server_id)
+                    .expect("Failed to find server");
+                let setting = server
+                    .settings
+                    .config_entries
+                    .entries
+                    .get_mut(setting_id)
+                    .expect("Failed to find setting");
+                setting.is_favorite = value;
+                Command::none()
+            }
             ServerSettingsMessage::QueryChanged(query) => {
                 trace!("Query Changed {}", query);
                 app_state.mode = MainWindowMode::EditProfile(ServerSettingsContext {
@@ -458,13 +476,17 @@ pub(crate) fn make_dialog<'a>(
 
                 // Sort by:
                 // 1. If we have an override, then
-                // 2. By the name of the entry, then
-                // 3. By the location of the entry
+                // 2. By the location of the entry
+                // 3. By the name of the entry
                 entries.sort_by(
                     |(metadata_left, server_left), (metadata_right, server_right)| {
                         server_right
                             .is_some()
                             .cmp(&server_left.is_some())
+                            .then_with(|| {
+                                // This is reversed because false compares before true, and we want it the other way around
+                                server_left.map(|(_, e)| e.is_favorite).unwrap_or_default().cmp(&server_right.map(|(_, e)| e.is_favorite).unwrap_or_default()).reverse()
+                            })
                             .then_with(|| {
                                 let (name_left, location_left) = metadata_left
                                     .map(|(_, v)| v.get_name_location())
@@ -522,9 +544,13 @@ pub(crate) fn make_dialog<'a>(
                                 );
                             }
                         }
-                        if let (Some((metadata_id, _)), Some((setting_id, _))) =
+                        if let (Some((metadata_id, _)), Some((setting_id, config_entry))) =
                             (metadata_entry, server_entry)
                         {
+                            let setting_id: usize = *setting_id;
+                            buttons_content.push(checkbox("", config_entry.is_favorite,
+                        move |v| ServerSettingsMessage::SetFavorite { setting_id, value: v }.into() ).into());
+
                             buttons_content.push(
                                 make_button(
                                     "Edit",
@@ -532,7 +558,7 @@ pub(crate) fn make_dialog<'a>(
                                         ServerSettingsMessage::EditSetting {
                                             from_query: query.to_owned(),
                                             metadata_id: *metadata_id,
-                                            setting_id: *setting_id,
+                                            setting_id,
                                         }
                                         .into(),
                                     ),
@@ -557,7 +583,7 @@ pub(crate) fn make_dialog<'a>(
                                 .into(),
                             )
                         }
-                        let buttons_content = row(buttons_content).spacing(5);
+                        let buttons_content = row(buttons_content).align_items(Alignment::Center).spacing(5);
 
                         let mut entry_main_content: Vec<Element<_>> = Vec::new();
                         entry_main_content.push(text(name.to_owned()).size(16).into());

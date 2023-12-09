@@ -274,6 +274,7 @@ pub(crate) fn import_ini_with_metadata(
                             let config_entry = ConfigEntry {
                                 meta_name: metadata_entry.name.to_owned(),
                                 meta_location: metadata_entry.location.to_owned(),
+                                is_favorite: false,
                                 value: variant,
                             };
                             trace!(
@@ -353,6 +354,7 @@ pub(crate) fn import_config_file(file: impl AsRef<str>) -> Result<(ConfigMetadat
             let config_entry = ConfigEntry {
                 meta_name: key.to_owned(),
                 meta_location: location.clone(),
+                is_favorite: false,
                 value: default_value.clone(),
             };
             config_entries.entries.push(config_entry);

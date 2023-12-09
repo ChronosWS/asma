@@ -7,6 +7,8 @@ use super::{ConfigLocation, ConfigVariant, MetadataEntry};
 pub struct ConfigEntry {
     pub meta_name: String,
     pub meta_location: ConfigLocation,
+    #[serde(default)]
+    pub is_favorite: bool,
     pub value: ConfigVariant,
 }
 
@@ -21,6 +23,7 @@ impl From<&MetadataEntry> for ConfigEntry {
         Self {
             meta_name: value.name.to_owned(),
             meta_location: value.location.to_owned(),
+            is_favorite: false,
             value: value
                 .default_value
                 .to_owned()
