@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.27] - Metadata updated
+* `ActiveMods` removed. Use `mods` instead
+* `SupplyCrateLootQualityMultiplier` and `FishingLootQualityMultiplier` added
+
 [0.3.26] - Favorite settings enabled
 * The checkbox on the right side of a setting lets you mark it as a favorite, so it will always
   show up at the top of the list
