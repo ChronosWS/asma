@@ -803,7 +803,6 @@ pub(crate) fn make_dialog<'a>(
                     icons::FOLDER_OPEN.clone()
                 )
                 .width(100),
-                install_server_api_button.width(200),
                 make_button(
                     "Set Location...",
                     (!server_settings.name.is_empty() && is_not_editing && !is_installed)
@@ -814,6 +813,10 @@ pub(crate) fn make_dialog<'a>(
             ]
             .spacing(5)
             .align_items(Alignment::Center),
+            row![
+            text("Options").size(18),
+            horizontal_rule(3),
+            ].spacing(5).align_items(Alignment::Center),
             row![
                 toggler(
                     String::new(),
@@ -834,7 +837,18 @@ pub(crate) fn make_dialog<'a>(
             ]
             .spacing(5)
             .align_items(Alignment::Center),
+            row![
+                install_server_api_button.width(200),
+                text(
+"ServerAPI allows the use of server plugins (not mods). Only install this if you know what it is and intend to install Server Plugins. Note that \n\
+the first time you start the server after installing ServerAPI it can take up to 15 minutes to initialize."
+            ).size(12),
+            ].spacing(5)
+            .align_items(Alignment::Center),
+            row![
+            text("Game Settings").size(18),
             horizontal_rule(3),
+            ].spacing(5).align_items(Alignment::Center),
             scrollable(editor_content)
         ]
         .spacing(5),

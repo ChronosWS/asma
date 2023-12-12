@@ -28,7 +28,7 @@ use sysinfo::{System, SystemExt};
 use tantivy::Index;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{channel, Sender};
-use tracing::{error, trace, warn};
+use tracing::{error, trace, warn, info};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::{filter::LevelFilter, prelude::*, Layer};
 
@@ -1142,6 +1142,7 @@ impl Application for AppState {
 
 fn main() -> iced::Result {
     init_tracing();
+    info!("ASMA version {}", env!("CARGO_PKG_VERSION"));
 
     #[cfg(not(feature = "conpty"))]
     trace!("Using compatibility console handling");
@@ -1149,7 +1150,6 @@ fn main() -> iced::Result {
     trace!("Using advanced console handling");
 
     let opt = Opt::from_args();
-
     if opt.do_update {
         update_utils::do_update();
     } else {

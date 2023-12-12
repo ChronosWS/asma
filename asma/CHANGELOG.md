@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.28] - Move ServerAPI install button
+* Most people don't need to install it, but it's location was making it look like it was a normal
+  part of setting up the server
+
 [0.3.27] - Metadata updated
 * `ActiveMods` removed. Use `mods` instead
 * `SupplyCrateLootQualityMultiplier` and `FishingLootQualityMultiplier` added
