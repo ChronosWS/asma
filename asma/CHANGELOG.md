@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.29] - Allow removing ServerAPI
+* There is now a button to remove the ServerAPI once it is installed
+
 [0.3.28] - Move ServerAPI install button
 * Most people don't need to install it, but it's location was making it look like it was a normal
   part of setting up the server

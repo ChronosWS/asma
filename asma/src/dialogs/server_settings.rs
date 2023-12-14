@@ -20,7 +20,7 @@ use crate::{
         RunState, ServerApiState
     },
     settings_utils::{remove_server_settings, save_server_settings_with_error},
-    AppState, MainWindowMode, Message, serverapi_utils::install_server_api, style::card_style,
+    AppState, MainWindowMode, Message, serverapi_utils::{install_server_api, remove_server_api}, style::card_style,
 };
 
 pub enum ServerSettingsEditContext {
@@ -48,6 +48,7 @@ pub enum ServerSettingsMessage {
     DeleteServer,
     ServerSetName(String),
     InstallServerApi,
+    RemoveServerApi,
     OpenServerInstallationDirectory,
     SetServerInstallationDirectory,
 
@@ -130,6 +131,16 @@ pub(crate) fn update(app_state: &mut AppState, message: ServerSettingsMessage) -
                 } else {
                     Command::none()
                 }
+            }
+            ServerSettingsMessage::RemoveServerApi => {
+                if let Some(server) = app_state.servers.get_mut(server_id) {
+                    server.state.server_api_state = ServerApiState::NotInstalled;
+                    
+                    if let Err(e) = remove_server_api(&server.settings.installation_location) {
+                        error!("Failed to uninstall ServerApi: {}", e.to_string());
+                    }
+                }
+                Command::none()
             }
             ServerSettingsMessage::SettingsEditor(m) => if let ServerSettingsEditContext::Editing {  editor, .. } = edit_context {
                 editor.update(m)
@@ -732,19 +743,25 @@ pub(crate) fn make_dialog<'a>(
 
     let install_server_api_button = match &app_state.servers.get(settings_context.server_id).map(|s| &s.state.server_api_state) {
         Some(ServerApiState::Installed { version }) => 
+            row![
             make_button(
                 "Update ServerApi",
                 (is_not_editing && !server_settings.installation_location.is_empty() && can_install_server_api && app_state.global_state.server_api_version.version > *version)
                     .then_some(ServerSettingsMessage::InstallServerApi.into()),
                 icons::DOWNLOAD.clone()
-            )
+            ),make_button(
+                "Remove ServerApi",
+                (is_not_editing && !server_settings.installation_location.is_empty())
+                    .then_some(ServerSettingsMessage::RemoveServerApi.into()),
+                icons::DELETE.clone()
+            )].spacing(5).align_items(Alignment::Center)
         ,
-        _ => make_button(
+        _ => row![make_button(
             "Install ServerApi",
             (is_not_editing && !server_settings.installation_location.is_empty() && can_install_server_api)
                 .then_some(ServerSettingsMessage::InstallServerApi.into()),
             icons::DOWNLOAD.clone()
-        )
+        )]
     };
 
     container(
@@ -838,11 +855,11 @@ pub(crate) fn make_dialog<'a>(
             .spacing(5)
             .align_items(Alignment::Center),
             row![
-                install_server_api_button.width(200),
+                install_server_api_button,
                 text(
 "ServerAPI allows the use of server plugins (not mods). Only install this if you know what it is and intend to install Server Plugins. Note that \n\
 the first time you start the server after installing ServerAPI it can take up to 15 minutes to initialize."
-            ).size(12),
+            ).size(12).width(Length::Fill),
             ].spacing(5)
             .align_items(Alignment::Center),
             row![
@@ -855,4 +872,5 @@ the first time you start the server after installing ServerAPI it can take up to
     )
     .padding(10)
     .style(theme::Container::Box)
+
 }

@@ -125,3 +125,14 @@ pub async fn install_server_api(
     trace!("ServerApi installed to {}", install_path.display());
     Ok(())
 }
+
+pub fn remove_server_api(
+    install_location: impl AsRef<str>
+) -> Result<()> {
+    let mut install_path = PathBuf::from(install_location.as_ref());
+    install_path.push("ShooterGame");
+    install_path.push("Binaries");
+    install_path.push("Win64");
+    install_path.push("server_api_version.json");
+    std::fs::remove_file(&install_path).with_context(|| format!("Failed to remove {}", install_path.display()))
+}
