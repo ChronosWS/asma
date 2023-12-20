@@ -106,6 +106,7 @@ pub fn generate_command_line(
         .config_entries
         .entries
         .iter()
+        .filter(|e| e.meta_name != "additionalOptions") // We handle this separately below
         .filter_map(|e| {
             config_metadata
                 .find_entry(&e.meta_name, &e.meta_location)
@@ -152,14 +153,41 @@ pub fn generate_command_line(
     }
     .with_context(|| "Failed to find required MapName setting")?;
 
-    let url_params = settings_meta_map
+    let additional_options = server_settings
+        .config_entries
+        .entries
+        .iter()
+        .find(|e| e.meta_name == "additionalOptions");
+
+    let mut url_params = settings_meta_map
         .iter()
         .filter(|(e, _)| e.meta_location == ConfigLocation::MapUrlOption)
         .map(|(e, _)| format!("{}={}", e.meta_name, e.value))
         .collect::<Vec<_>>()
         .join("?");
 
-    let switch_params = settings_meta_map
+    if let Some(additional_options) = additional_options {
+        if let ConfigVariant::Vector(values) = &additional_options.value {
+            url_params += values
+                .iter()
+                .filter_map(|v| {
+                    if let ConfigValue::String(s) = v {
+                        if s.starts_with('?') {
+                            Some(s.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("")
+                .as_str();
+        }
+    }
+
+    let mut switch_params = settings_meta_map
         .iter()
         .filter(|(e, _)| e.meta_location == ConfigLocation::CommandLineOption)
         .map(|(e, m)| {
@@ -184,7 +212,23 @@ pub fn generate_command_line(
             } else {
                 format!("-{}={}", e.meta_name, e.value)
             }
-        });
+        }).collect::<Vec<_>>();
+
+    if let Some(additional_options) = additional_options {
+        if let ConfigVariant::Vector(values) = &additional_options.value {
+            switch_params.extend(values.iter().filter_map(|v| {
+                if let ConfigValue::String(s) = v {
+                    if s.starts_with('-') {
+                        Some(s.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }));
+        }
+    }
 
     if url_params.is_empty() {
         args.push(map.to_owned());

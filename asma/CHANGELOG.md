@@ -1,5 +1,10 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.30] - Allow setting arbitrary command-line and map url parameters with `additionalOptions`
+* The `additionalOptions` parameter is a special parameter which allows setting switch options with start with `-`
+  and map url options which start with `?` in case ASMA hasn't caught up to WCs latest changes, or if you need access to
+  mod-specific or unusual command-line overrides
+
 [0.3.29] - Allow removing ServerAPI
 * There is now a button to remove the ServerAPI once it is installed
 
