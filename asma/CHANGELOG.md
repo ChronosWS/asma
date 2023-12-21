@@ -1,5 +1,11 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.32] - Cryopod settings added
+* `DisableCryopodEnemyCheck`
+* `AllowCryoFridgeOnSaddle`
+* `DisableCryopodFridgeRequirement`
+* Thanks @Lacoi!
+
 [0.3.31] - Fix Multihome specification
 * The `-MULTIHOME` command-line option now specifies the IP address to bind to, rather than the incorrect GUS setting.
 * Thanks @Lacoi and @!Perlop
