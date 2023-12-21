@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.31] - Fix Multihome specification
+* The `-MULTIHOME` command-line option now specifies the IP address to bind to, rather than the incorrect GUS setting.
+* Thanks @Lacoi and @!Perlop
+
 [0.3.30] - Allow setting arbitrary command-line and map url parameters with `additionalOptions`
 * The `additionalOptions` parameter is a special parameter which allows setting switch options with start with `-`
   and map url options which start with `?` in case ASMA hasn't caught up to WCs latest changes, or if you need access to
