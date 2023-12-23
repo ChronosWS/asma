@@ -1,5 +1,10 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.34] - Fix #56 - Change `mods` to String type to allow `-dev`
+* This allows mod developers to load mods in development
+* Also we now trim whitespace from the start and end of string values for settings.
+* Fix some clippy warnings
+
 [0.3.33] - Taming limits settings, misc UI issues
 * Search bar no longer scrolls away
 * Fix issue with very long setting names causing buttons to disappear

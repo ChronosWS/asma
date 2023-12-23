@@ -37,7 +37,7 @@ impl From<SettingChange> for ConfigValue {
         match change {
             SettingChange::BoolValue(v) => ConfigValue::Bool(v),
             SettingChange::IntegerValue(v, ..) => ConfigValue::Integer(v),
-            SettingChange::StringValue(v) => ConfigValue::String(v),
+            SettingChange::StringValue(v) => ConfigValue::String(v.trim().to_owned()),
             SettingChange::FloatValue(v, ..) => ConfigValue::Float(v),
             SettingChange::EnumValue { enum_name, value } => ConfigValue::Enum { enum_name, value },
             _ => unreachable!(),

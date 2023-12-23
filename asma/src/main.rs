@@ -542,7 +542,7 @@ impl Application for AppState {
                         start_server(
                             id,
                             server_settings.name.clone(),
-                            server_settings.installation_location.to_owned(),
+                            server_settings.installation_location.clone(),
                             use_server_api,
                             args,
                         ),
@@ -772,8 +772,8 @@ impl Application for AppState {
                 Command::perform(
                     update_server(
                         id,
-                        self.global_settings.steamcmd_directory.to_owned(),
-                        server_settings.installation_location.to_owned(),
+                        self.global_settings.steamcmd_directory.clone(),
+                        server_settings.installation_location.clone(),
                         app_id,
                         mode,
                         self.server_sender_channel.as_ref().unwrap().clone(),
@@ -792,7 +792,7 @@ impl Application for AppState {
                     .expect("Failed to look up server settings");
                 let app_id = self.global_settings.app_id.to_owned();
                 Command::perform(
-                    validate_server(id, server_settings.installation_location.to_owned(), app_id),
+                    validate_server(id, server_settings.installation_location.clone(), app_id),
                     move |result| {
                         result
                             .map(|r| Message::ServerValidated(id, r))
@@ -1105,7 +1105,6 @@ impl Application for AppState {
                         .align_x(Horizontal::Center)
                         .into(),
                 )
-                .into()
         }
 
         main_content_children.push(main_header.into());
@@ -1118,18 +1117,18 @@ impl Application for AppState {
         let result: Element<Message> = match &self.mode {
             MainWindowMode::Servers => main_content.into(),
             MainWindowMode::GlobalSettings => {
-                Modal::new(main_content, dialogs::global_settings::make_dialog(&self))
+                Modal::new(main_content, dialogs::global_settings::make_dialog(self))
                     .on_blur(GlobalSettingsMessage::CloseGlobalSettings.into())
                     .into()
             }
             MainWindowMode::MetadataEditor(edit_context) => Modal::new(
                 main_content,
-                dialogs::metadata_editor::make_dialog(&self, edit_context),
+                dialogs::metadata_editor::make_dialog(self, edit_context),
             )
             .into(),
             MainWindowMode::EditProfile(edit_context) => Modal::new(
                 main_content,
-                dialogs::server_settings::make_dialog(&self, edit_context),
+                dialogs::server_settings::make_dialog(self, edit_context),
             )
             .into(),
         };

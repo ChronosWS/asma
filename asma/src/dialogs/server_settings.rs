@@ -603,7 +603,7 @@ pub(crate) fn make_dialog<'a>(
                             if !value.is_empty() {
                                 entry_main_content.push(text("=").into());
                                 const MAX_VALUE_LEN: usize = 100;
-                                entry_main_content.push(text(&value[0..value.len().min(MAX_VALUE_LEN)]).width(800).into());
+                                entry_main_content.push(text(&value[0..value.len().min(MAX_VALUE_LEN)]).into());
                                 if value.len() >= MAX_VALUE_LEN {
                                     entry_main_content.push(text("...").size(12).into());
                                 }
@@ -640,14 +640,7 @@ pub(crate) fn make_dialog<'a>(
             };
 
             column![
-                row![
-                    text("Search:"),
-                    text_input("Query", query)
-                        .on_input(|v| ServerSettingsMessage::QueryChanged(v).into())
-                ]
-                .spacing(5)
-                .align_items(Alignment::Center),
-                horizontal_rule(3),
+                
                 search_content.spacing(1)
             ]
             .spacing(5)
@@ -764,6 +757,21 @@ pub(crate) fn make_dialog<'a>(
         )]
     };
 
+    let search_bar_content = if let 
+        ServerSettingsEditContext::NotEditing { query } = &settings_context.edit_context {
+            column![
+                row![
+                    text("Search:"),
+                    text_input("Query", query)
+                        .on_input(|v| ServerSettingsMessage::QueryChanged(v).into())
+                ]
+                .spacing(5)
+                .align_items(Alignment::Center),
+            horizontal_rule(3)
+            ].spacing(5)
+        } else {
+            column![]
+        };
     container(
         column![
             row![
@@ -866,6 +874,7 @@ the first time you start the server after installing ServerAPI it can take up to
             text("Game Settings").size(18),
             horizontal_rule(3),
             ].spacing(5).align_items(Alignment::Center),
+            search_bar_content,
             scrollable(editor_content)
         ]
         .spacing(5),
