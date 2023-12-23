@@ -1,5 +1,13 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.33] - Taming limits settings, misc UI issues
+* Search bar no longer scrolls away
+* Fix issue with very long setting names causing buttons to disappear
+* `DestroyTamesOverTheSoftTameLimit` added
+* `MaxTamedDinos_SoftTameLimit` added
+* `MaxTamedDinos_SoftTameLimit_CountdownForDeletionDuration` added
+* Thanks @Lacoi!
+
 [0.3.32] - Cryopod settings added
 * `DisableCryopodEnemyCheck`
 * `AllowCryoFridgeOnSaddle`
