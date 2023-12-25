@@ -295,7 +295,7 @@ impl SettingEditor {
         l: impl Fn(SettingChange) -> SettingEditorMessage + 'a,
         f: impl Fn(SettingEditorMessage) -> Message + 'a,
     ) -> Row<'a, Message> {
-        row![text_input("Value...", value)
+        row![text_input("Value...", value).width(1024)
             .on_input(move |new| { f(l(SettingChange::StringValue(new))) }),]
     }
 

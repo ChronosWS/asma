@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.35] - Fix issue with vectors now showing editor controls
+* An issue with string values (affecting `mods`) was causing vector editor controls to not be visible.
+* There is a larger layout issue here but this is a simple temporary fix
+
 [0.3.34] - Fix #56 - Change `mods` to String type to allow `-dev`
 * This allows mod developers to load mods in development
 * Also we now trim whitespace from the start and end of string values for settings.
