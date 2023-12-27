@@ -95,7 +95,7 @@ impl RunData {
 pub enum RunState {
     NotInstalled,
     Stopped,
-    Starting,
+    Starting(u32),
     Available(RunData),
     Stopping,
 }
@@ -105,7 +105,7 @@ impl Display for RunState {
         let value = 
         match self {
             Self::NotInstalled => "Not Installed",
-            Self::Starting => "Starting",
+            Self::Starting(_) => "Starting",
             Self::Stopped => "Stopped",
             Self::Stopping => "Stopping",
             Self::Available(_) => "Running"

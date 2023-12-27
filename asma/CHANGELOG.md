@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.36] - Fix #47 - Race condition on server start not detecting server
+* There was an issue with sometimes not detecting a server you just started.  This should be fixed now.
+
 [0.3.35] - Fix issue with vectors now showing editor controls
 * An issue with string values (affecting `mods`) was causing vector editor controls to not be visible.
 * There is a larger layout issue here but this is a simple temporary fix

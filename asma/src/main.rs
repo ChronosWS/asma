@@ -547,7 +547,7 @@ impl Application for AppState {
                             args,
                         ),
                         move |res| match res {
-                            Ok(_) => Message::ServerRunStateChanged(id, RunState::Starting),
+                            Ok(pid) => Message::ServerRunStateChanged(id, RunState::Starting(pid)),
                             Err(e) => {
                                 error!("Failed to start server: {}", e.to_string());
                                 Message::ServerRunStateChanged(id, RunState::Stopped)
@@ -608,7 +608,7 @@ impl Application for AppState {
                 // TODO: If we hit the Starting state, we should start the process monitor for this server.
                 // Once we hit the Stopped state, we can stop the process monitor.
                 server_state.run_state = run_state.clone();
-                if let RunState::Starting = run_state {
+                if let RunState::Starting(pid) = run_state {
                     // Get the mod ids
                     if let Some(command_channel) = self.monitor_command_channel.to_owned() {
                         Command::perform(
@@ -616,6 +616,7 @@ impl Application for AppState {
                                 command_channel,
                                 ServerMonitorCommand::AddServer {
                                     server_id,
+                                    pid: Some(pid),
                                     installation_dir,
                                     rcon_settings,
                                 },
@@ -924,6 +925,7 @@ impl Application for AppState {
                                 command_channel,
                                 ServerMonitorCommand::AddServer {
                                     server_id,
+                                    pid: None,
                                     installation_dir,
                                     rcon_settings,
                                 },

@@ -16,7 +16,7 @@ pub fn server_card<'a>(global_state: &'a GlobalState, server: &'a Server) -> Ele
             Some(Message::StartServer(server.id())),
             icons::START.clone(),
         )),
-        RunState::Starting => container(row![
+        RunState::Starting(_) => container(row![
             //text("Starting..."),
             horizontal_space(Length::Fill),
             make_button(

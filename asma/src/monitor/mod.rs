@@ -34,6 +34,7 @@ pub struct RconMonitorSettings {
 pub enum ServerMonitorCommand {
     AddServer {
         server_id: Uuid,
+        pid: Option<u32>,
         installation_dir: String,
         rcon_settings: Option<RconMonitorSettings>,
     },
@@ -152,6 +153,7 @@ pub async fn monitor_server(
             match command {
                 Ok(Some(ServerMonitorCommand::AddServer {
                     server_id,
+                    pid,
                     installation_dir,
                     rcon_settings,
                 })) => {
@@ -164,15 +166,24 @@ pub async fn monitor_server(
                                 server_id,
                                 exe_path.display()
                             );
-                            // Refresh all processes so we can find the PID in the set of command-lines
-                            system.refresh_processes();
-                            let process = system.processes().values().find(|process| {
-                                process
-                                    .exe()
-                                    .canonicalize()
-                                    .map(|process_exe| process_exe == exe_path)
-                                    .unwrap_or(false)
-                            });
+                            // If we were given the PID, use that, otherwise look up the executable
+                            let process = if let Some(pid) = pid {
+                                let pid = Pid::from_u32(pid);
+                                if system.refresh_process(pid) {
+                                    system.process(pid)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                system.refresh_processes();
+                                system.processes().values().find(|process| {
+                                    process
+                                        .exe()
+                                        .canonicalize()
+                                        .map(|process_exe| process_exe == exe_path)
+                                        .unwrap_or(false)
+                                })
+                            };
                             if let Some(process) = process {
                                 let pid = process.pid();
 
@@ -303,7 +314,8 @@ pub async fn monitor_server(
         let now = Instant::now();
 
         // Check for ASMA updates
-        if last_asma_update_check.map(|t| now - t > Duration::from_secs(monitor_config.app_update_check_seconds))
+        if last_asma_update_check
+            .map(|t| now - t > Duration::from_secs(monitor_config.app_update_check_seconds))
             .unwrap_or(true)
         {
             let _ = check_for_asma_updates(&status_sender, &monitor_config.app_update_url)
@@ -313,7 +325,8 @@ pub async fn monitor_server(
         }
 
         // Check for server updates
-        if last_server_update_check.map(|t| now - t > Duration::from_secs(monitor_config.server_update_check_seconds))
+        if last_server_update_check
+            .map(|t| now - t > Duration::from_secs(monitor_config.server_update_check_seconds))
             .unwrap_or(true)
         {
             let _ = check_for_steam_updates(&status_sender, &monitor_config.steam_app_id)
@@ -329,7 +342,8 @@ pub async fn monitor_server(
 
         // Check for mod updates
         if let Some(mod_update_records) = &mod_update_records {
-            if last_mods_update_check.map(|t| now - t > Duration::from_secs(monitor_config.mods_update_check_seconds))
+            if last_mods_update_check
+                .map(|t| now - t > Duration::from_secs(monitor_config.mods_update_check_seconds))
                 .unwrap_or(true)
             {
                 let _ = check_for_mod_updates(&status_sender, mod_update_records)
@@ -340,7 +354,8 @@ pub async fn monitor_server(
         }
 
         // Check for server api updates
-        if last_server_api_update_check.map(|t| now - t > Duration::from_secs(monitor_config.server_api_update_check_seconds))
+        if last_server_api_update_check
+            .map(|t| now - t > Duration::from_secs(monitor_config.server_api_update_check_seconds))
             .unwrap_or(true)
         {
             let _ =

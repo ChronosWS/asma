@@ -248,7 +248,7 @@ pub async fn start_server(
     installation_dir: impl AsRef<str>,
     use_server_api: bool,
     args: Vec<String>,
-) -> Result<()> {
+) -> Result<u32> {
     let installation_dir = installation_dir.as_ref();
     let exe_path = Path::new(installation_dir);
     // TODO: Refactor this out, it's shared with the monitor code
@@ -281,7 +281,7 @@ pub async fn start_server(
         .with_context(|| format!("Failed to spawn server: {}", command_string))?;
     let pid = child.id().expect("Failed to get child process id");
     trace!("{}: PID: {}", server_id, pid);
-    Ok(())
+    Ok(pid)
 }
 
 #[cfg(not(feature = "conpty"))]
