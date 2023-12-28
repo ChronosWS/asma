@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.37] - Fix issue with not allowing spaces in strings
+* I broke this with in 0.3.34.  Oops.
+
 [0.3.36] - Fix #47 - Race condition on server start not detecting server
 * There was an issue with sometimes not detecting a server you just started.  This should be fixed now.
 
