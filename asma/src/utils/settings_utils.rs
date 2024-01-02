@@ -165,20 +165,35 @@ fn fixup_metadata_mismatches(
         {
             let config_entry_value_type = config_entry.value.get_value_type();
             if metadata_entry.value_type != config_entry_value_type {
-                trace!(
-                    "Entry {} ({}) has mismatched type {}, should be {}",
-                    config_entry.meta_name,
-                    config_entry.meta_location,
-                    config_entry_value_type,
-                    metadata_entry.value_type
-                );
-                let str_value = config_entry.value.to_string();
-                if let Ok(variant) =
-                    ConfigVariant::from_type_and_value(&metadata_entry.value_type, &str_value)
-                {
-                    config_entry.value = variant;
+                // If the entry is a vector and it is also empty, then we will may have misattributed the
+                // value type as String when it might be something else.  This is due to Vectors not containing
+                // their element type in the Vector definition, but rather the individual entry definition.  If
+                // this is the case, don't emit any warnings and don't try and convert, just make an empty vector.
+                let use_default = if let ConfigVariant::Vector(entries) = &config_entry.value {
+                    entries.is_empty()
                 } else {
-                    warn!("Failed to convert entry");
+                    false
+                };
+
+                if use_default {
+                    config_entry.value =
+                        ConfigVariant::default_from_type(&metadata_entry.value_type)
+                } else {
+                    trace!(
+                        "Entry {} ({}) has mismatched type {}, should be {}",
+                        config_entry.meta_name,
+                        config_entry.meta_location,
+                        config_entry_value_type,
+                        metadata_entry.value_type
+                    );
+                    let str_value = config_entry.value.to_string();
+                    if let Ok(variant) =
+                        ConfigVariant::from_type_and_value(&metadata_entry.value_type, &str_value)
+                    {
+                        config_entry.value = variant;
+                    } else {
+                        warn!("Failed to convert entry");
+                    }
                 }
             }
         } else {
@@ -246,8 +261,8 @@ pub fn remove_server_settings(
     global_settings: &GlobalSettings,
     server_settings: &ServerSettings,
 ) -> Result<()> {
-    let server_file = Path::new(&global_settings.profiles_directory)
-        .join(format!("{}.json", server_settings.id));
+    let server_file =
+        Path::new(&global_settings.profiles_directory).join(format!("{}.json", server_settings.id));
     std::fs::remove_file(server_file).with_context(|| "Failed to remove server settings file")
 }
 
@@ -255,8 +270,8 @@ pub fn save_server_settings(
     global_settings: &GlobalSettings,
     server_settings: &ServerSettings,
 ) -> Result<()> {
-    let server_file = Path::new(&global_settings.profiles_directory)
-        .join(format!("{}.json", server_settings.id));
+    let server_file =
+        Path::new(&global_settings.profiles_directory).join(format!("{}.json", server_settings.id));
     trace!(
         "Save profile {} ({}) to {:?}",
         server_settings.name,

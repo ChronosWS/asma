@@ -1,5 +1,9 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.38] - Fix #62 - Empty vectors of non-strings produce warnings on load
+* These will no longer produce warnings.  Easiest to produce this when importing complex vector
+  values from INI files because structured import is broken.  That is a separate issue.
+
 [0.3.37] - Fix issue with not allowing spaces in strings
 * I broke this with in 0.3.34.  Oops.
 
