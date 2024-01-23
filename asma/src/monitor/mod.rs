@@ -320,7 +320,7 @@ pub async fn monitor_server(
         {
             let _ = check_for_asma_updates(&status_sender, &monitor_config.app_update_url)
                 .await
-                .map_err(|e| warn!("Failed to get latest ASMA version info: {}", e.to_string()));
+                .map_err(|e| warn!("Failed to get latest ASMA version info: {:#}", e));
             last_asma_update_check = Some(now)
         }
 

@@ -14,6 +14,14 @@ If you are using VSCode, you will also want several extensions:
 * `Even Better TOML`
 * `CodeLLDB`
 
+If you are building on Linux, you will also need the following additional libraries installed:
+* `libgtk-3-dev` - See [www.gtk.org](https://www.gtk.org/docs/installations/linux/)
+
+If you are cross-compiling Windows binaries on Linux, you need the following:
+* `mingw-w64` - The MinGW libraries for cross compilation.  How you install these might depend on your distro.
+  * For example, on Ubuntu/Debian, the following: `sudo apt-get install mingw-w64`
+* `rustup target add x86_64-pc-windows-gnu` - Installs the toolchain and target to build Windows binaries on Linux
+
 From the root of this repository, you can then build and run on the command line:
 
 ```

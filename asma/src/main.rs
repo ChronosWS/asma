@@ -16,7 +16,7 @@ use iced::{
 
 use mod_utils::{get_mod_update_records, ServerModsStatuses};
 use models::config::ConfigEntries;
-use monitor::{ServerMonitorCommand, RconResponse};
+use monitor::{RconResponse, ServerMonitorCommand};
 use reqwest::Url;
 use rfd::{MessageButtons, MessageDialogResult, MessageLevel};
 use server::{UpdateServerProgress, ValidationResult};
@@ -36,23 +36,20 @@ mod components;
 mod dialogs;
 mod fonts;
 mod icons;
-mod style;
 mod modal;
 mod models;
 mod monitor;
 mod server;
+mod style;
 mod utils;
 
 pub use utils::*;
 
 use crate::ini_utils::update_inis_from_settings;
 use crate::models::config::{ConfigLocation, IniFile, IniSection};
-use crate::monitor::{RconMonitorSettings, monitor_server, MonitorConfig};
+use crate::monitor::{monitor_server, MonitorConfig, RconMonitorSettings};
 use crate::server::import_server_settings;
-use crate::server::{
-    os::update_server, start_server, validate_server,
-    UpdateMode,
-};
+use crate::server::{os::update_server, start_server, validate_server, UpdateMode};
 use crate::settings_utils::save_server_settings_with_error;
 use modal::Modal;
 use models::*;
@@ -522,9 +519,7 @@ impl Application for AppState {
                 trace!("Start Server {}", id);
                 let use_server_api = self
                     .get_server_state_mut(id)
-                    .map(|s| {
-                        matches!(&s.server_api_state, ServerApiState::Installed { .. })
-                    })
+                    .map(|s| matches!(&s.server_api_state, ServerApiState::Installed { .. }))
                     .unwrap_or_default();
                 let server_settings = self
                     .get_server_settings(id)
@@ -1093,20 +1088,17 @@ impl Application for AppState {
 
         let mut main_content_children: Vec<Element<_>> = Vec::new();
         if option_env!("IS_RELEASE_TARGET").is_none() {
-            main_content_children
-                .push(
-                    container(text("DEVELOPMENT BUILD - USE AT YOUR OWN RISK").size(15))
-                        .style(move |_: &_| container::Appearance {
-                            text_color: Some(Color::WHITE),
-                            background: Some(iced::Background::Color(Color::from_rgb(
-                                1.0, 0.0, 0.0,
-                            ))),
-                            ..Default::default()
-                        })
-                        .width(Length::Fill)
-                        .align_x(Horizontal::Center)
-                        .into(),
-                )
+            main_content_children.push(
+                container(text("DEVELOPMENT BUILD - USE AT YOUR OWN RISK").size(15))
+                    .style(move |_: &_| container::Appearance {
+                        text_color: Some(Color::WHITE),
+                        background: Some(iced::Background::Color(Color::from_rgb(1.0, 0.0, 0.0))),
+                        ..Default::default()
+                    })
+                    .width(Length::Fill)
+                    .align_x(Horizontal::Center)
+                    .into(),
+            )
         }
 
         main_content_children.push(main_header.into());
@@ -1144,6 +1136,7 @@ impl Application for AppState {
 
 fn main() -> iced::Result {
     init_tracing();
+    reqwest_utils::init();
 
     #[cfg(not(feature = "conpty"))]
     trace!("Using compatibility console handling");

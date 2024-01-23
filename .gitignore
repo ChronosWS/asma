@@ -4,6 +4,8 @@ target/
 target.*/
 debug/
 local/
+bin/
+win_tools/
 contributions/
 explorations/
 

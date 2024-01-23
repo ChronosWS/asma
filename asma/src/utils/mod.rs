@@ -2,6 +2,7 @@ pub mod config_utils;
 pub mod ini_utils;
 pub mod mod_utils;
 pub mod network_utils;
+pub mod reqwest_utils;
 pub mod serverapi_utils;
 pub mod settings_utils;
 pub mod steamapi_utils;

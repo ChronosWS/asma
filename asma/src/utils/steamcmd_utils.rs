@@ -6,6 +6,8 @@ use std::{
 };
 use tracing::{error, trace};
 
+use crate::reqwest_utils;
+
 pub fn validate_steamcmd(installation_dir: impl AsRef<str>) -> bool {
     let steamcmd_exe = Path::new(installation_dir.as_ref()).join("steamcmd.exe");
 
@@ -30,12 +32,15 @@ pub async fn get_steamcmd(installation_dir: impl AsRef<str>) -> Result<bool> {
             zip_file_name.to_str().unwrap_or_default()
         )
     })?;
+
+    trace!("Downloading steamcmd");
     let mut response_stream =
-        reqwest::get("https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip")
+        reqwest_utils::get("https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip")
             .await
             .with_context(|| "Failed to get steamcmd from remote host")?
             .bytes_stream();
 
+    trace!("Reading response stream...");
     while let Some(bytes) = response_stream.next().await {
         let bytes = bytes.with_context(|| "Failed to read bytes from stream")?;
         let bytes_written = file

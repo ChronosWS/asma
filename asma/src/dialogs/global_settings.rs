@@ -54,10 +54,14 @@ pub(crate) fn update(app_state: &mut AppState, message: GlobalSettingsMessage) -
             app_state.global_state.steamcmd_state = SteamCmdState::Installing;
             Command::perform(
                 get_steamcmd(app_state.global_settings.steamcmd_directory.clone()),
-                |result| {
-                    if let Ok(true) = result {
-                        GlobalSettingsMessage::SteamCmdUpdated.into()
-                    } else {
+                |result| match result {
+                    Ok(true) => GlobalSettingsMessage::SteamCmdUpdated.into(),
+                    Ok(false) => {
+                        error!("get_steamcmd returned false");
+                        Message::None
+                    }
+                    Err(e) => {
+                        error!("Failed to get SteamCMD: {}", e.to_string());
                         Message::None
                     }
                 },
@@ -97,7 +101,8 @@ pub(crate) fn update(app_state: &mut AppState, message: GlobalSettingsMessage) -
                 error!("No folder selected");
             }
 
-            let steamcmd_state = if validate_steamcmd(&app_state.global_settings.steamcmd_directory) {
+            let steamcmd_state = if validate_steamcmd(&app_state.global_settings.steamcmd_directory)
+            {
                 SteamCmdState::Installed
             } else {
                 SteamCmdState::NotInstalled

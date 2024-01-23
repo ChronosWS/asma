@@ -212,7 +212,8 @@ pub fn generate_command_line(
             } else {
                 format!("-{}={}", e.meta_name, e.value)
             }
-        }).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     if let Some(additional_options) = additional_options {
         if let ConfigVariant::Vector(values) = &additional_options.value {
@@ -267,8 +268,11 @@ pub async fn start_server(
     let mut command = Command::new(exe);
     command.args(args);
     command.kill_on_drop(false);
-    const DETACHED_PROCESS: u32 = 0x00000008;
-    command.creation_flags(DETACHED_PROCESS);
+    #[cfg(windows)]
+    {
+        const DETACHED_PROCESS: u32 = 0x00000008;
+        command.creation_flags(DETACHED_PROCESS);
+    }
 
     let command_string = format!("{:?}", command);
     trace!("Launching server: {}", command_string);
@@ -284,7 +288,7 @@ pub async fn start_server(
     Ok(pid)
 }
 
-#[cfg(not(feature = "conpty"))]
+#[cfg(all(windows, not(feature = "conpty")))]
 pub mod os {
     use std::{path::Path, process::Stdio};
 
@@ -445,7 +449,7 @@ pub mod os {
     }
 }
 
-#[cfg(feature = "conpty")]
+#[cfg(all(windows, feature = "conpty"))]
 pub mod os {
     use std::{
         io::{ErrorKind, Read},
