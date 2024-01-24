@@ -14,18 +14,51 @@ If you are using VSCode, you will also want several extensions:
 * `Even Better TOML`
 * `CodeLLDB`
 
-If you are building on Linux, you will also need the following additional libraries installed:
+## Compiling on Windows
+
+If you are compling on Windows for Windows (no cross compiling) then there is no further setup necessary.
+
+## Compiling on Linux
+
+If you are compiling on Linux for Linux (no cross compiling) then you need to install the following
+dependencies:
+
 * `libgtk-3-dev` - See [www.gtk.org](https://www.gtk.org/docs/installations/linux/)
 
-If you are cross-compiling Windows binaries on Linux, you need the following:
-* `mingw-w64` - The MinGW libraries for cross compilation.  How you install these might depend on your distro.
-  * For example, on Ubuntu/Debian, the following: `sudo apt-get install mingw-w64`
-* `rustup target add x86_64-pc-windows-gnu` - Installs the toolchain and target to build Windows binaries on Linux
+## Cross Compiling Linux to Windows
 
-From the root of this repository, you can then build and run on the command line:
+If you are going to build on Linux, there are a number of additional steps you must take. While for many projects simply compiling
+against the `x86_64-pc-windows-gnu` target might work, for this one you need to actually compile against the MSVC target due to the
+functions some of the dependent crates are linking to - notably `conpty` which makes use of a number of OS-specific functions.
+
+### Toolchain setup
+
+You will need the following packages.  I am assuming an Ubuntu-compatible system here, so your package names may vary:
+
+* `llvm` - Needed for the `llvm-lib` linker. Run `sudo apt install llvm`
+* `clang` - Needed for the `clang-cc` compiler.  Run `sudo apt install clang`
+
+In addition you will need the following `cargo` tooling:
+* `cargo-xwin` - This cargo tool makes managing the Windows cross-compiling install easy.  Run `cargo install cargo-xwin`.
+
+Finally, you will need the correct rust target installed:
+* `x86_64-pc-windows-msvc` - This is the MSVC cross-compiler.  Run `rustup target add x86_64-pc-windows-msvc`
+
+### Compiling
+
+To cross-compile for Windows, you can now do the following (for example):
+
+`cargo xwin build -F conpty --release -p asma --target x86_64-pc-windows-msvc`
+
+## Running
+
+If you are _not_ cross-compiling, you can then build and run on the command line:
 
 ```
 cargo run
 ```
 
 Or, open the root of the repository in VSCode and (after everything gets itself set up the first time), choose `Run`->`Run Without Debugging`.
+
+If you _are_ cross-compiling, you will need to copy the binary from `target/x86_64-pc-windows-msvc` to the target machine, or execute it in
+the VM of your choosing. 
