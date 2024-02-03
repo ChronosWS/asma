@@ -1,6 +1,6 @@
 [package]
 name = "asma"
-version = "0.3.38"
+version = "0.3.39"
 authors = ["Cliff Hudson <cliff.s.hudson@gmail.com>"]
 edition = "2021"
 build = "build.rs"
@@ -32,7 +32,7 @@ curseforge = "0.3.1"
 # Regex support
 regex = "1.10.2"
 # Web access
-reqwest = { version = "0.11", features = ["json", "stream" ] }
+reqwest = { version = "0.11.23", features = ["json", "stream", "rustls-tls" ] }
 # System and process information
 sysinfo = "0.29.10"
 process_path = "0.1.4"

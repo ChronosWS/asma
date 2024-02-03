@@ -14,7 +14,7 @@ use tokio::sync::mpsc::Sender;
 use tracing::{error, trace, warn};
 use zip::ZipArchive;
 
-use crate::AsyncNotification;
+use crate::{AsyncNotification, reqwest_utils};
 
 #[derive(Debug, Clone)]
 pub enum AsmaUpdateState {
@@ -60,7 +60,7 @@ pub async fn update_asma(
         .with_context(|| "Failed to parse update url")?;
 
     // Download the new version
-    let response = reqwest::get(url)
+    let response = reqwest_utils::get(url)
         .await
         .with_context(|| "Failed to get update")?;
     let bytes_stream = response
@@ -156,8 +156,10 @@ pub async fn check_for_asma_updates(
                 .unwrap_or(release_files::LATEST_DEV_VERSION),
         )
         .with_context(|| "Failed to parse update url")?;
-    let version_response = reqwest::get(url)
-        .await
+    trace!("Looking for ASMA version at {}", url);
+    
+    // let version_response = reqwest::Client::builder().use_rustls_tls().build().unwrap().get(url).send()
+    let version_response = reqwest_utils::get(url).await
         .with_context(|| "Failed to get latest version")?;
 
     #[derive(Deserialize)]

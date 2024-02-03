@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.39] - Compilation instructions for Linux
+* Add instructions to HOW_TO_BUILD.md for compiling on Linux (native and cross-compilation)
+
 [0.3.38] - Fix #62 - Empty vectors of non-strings produce warnings on load
 * These will no longer produce warnings.  Easiest to produce this when importing complex vector
   values from INI files because structured import is broken.  That is a separate issue.
