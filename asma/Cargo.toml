@@ -1,6 +1,6 @@
 [package]
 name = "asma"
-version = "0.3.39"
+version = "0.3.40"
 authors = ["Cliff Hudson <cliff.s.hudson@gmail.com>"]
 edition = "2021"
 build = "build.rs"

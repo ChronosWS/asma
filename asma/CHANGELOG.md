@@ -1,5 +1,16 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.40] - Add various new config options
+* `DisabledInonetRangeScaling` added
+* `passivemods` added
+* `DisableCustomCosmetics` added
+* `AllowCaveBuildingPvP` added
+* `CosmeticWhitelistOverride` added
+* `MaxTributeDinos` added
+* `bUseDinoLevelUpAnimations` added
+* `HarvestResourceItemAmountClassMultipliers` added
+* Thanks @Lacoi!
+
 [0.3.39] - Compilation instructions for Linux
 * Add instructions to HOW_TO_BUILD.md for compiling on Linux (native and cross-compilation)
 
