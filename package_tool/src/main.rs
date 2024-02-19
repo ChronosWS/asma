@@ -32,6 +32,9 @@ struct Opt {
     target_platform: String,
 
     #[structopt(long)]
+    build_directory: String,
+
+    #[structopt(long)]
     release_target: ReleaseTarget,
 
     #[structopt(long)]
@@ -51,12 +54,7 @@ struct Version {
 
 fn main() -> Result<()> {
     let opt = Opt::from_args();
-    let target_path = if opt.target_platform.is_empty() {
-        "target".to_owned()
-    } else {
-        format!("target.{}", opt.target_platform)
-    };
-    let mut path = PathBuf::from(target_path);
+    let mut path = PathBuf::from(opt.build_directory);
     match opt.build_target {
         BuildTarget::Debug => path.push("debug"),
         BuildTarget::Release => path.push("release"),
@@ -196,7 +194,8 @@ fn execute_command<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(
 fn get_version(path: &PathBuf) -> Result<(PathBuf, Version)> {
     let version_file = Path::new(&path).join("version.json");
     let version = serde_json::from_reader::<_, Version>(BufReader::new(
-        File::open(&version_file).with_context(|| "Failed to open version file")?,
+        File::open(&version_file)
+            .with_context(|| format!("Failed to open version file {}", version_file.display()))?,
     ))
     .with_context(|| "Failed to deserialize version")?;
     Ok((version_file, version))
