@@ -1,5 +1,14 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.41] - Add cluster and other options
+* `ClusterDirOverride` added
+* `clusterid` added
+* `NoTransferFromFiltering` added
+* `TributeCharacterExpirationSeconds` added
+* `TributeDinoExpirationSeconds` added
+* `TributeItemExpirationSeconds` added
+* Thanks @Lacoi!
+
 [0.3.40] - Add various new config options
 * `DisabledInonetRangeScaling` added
 * `passivemods` added
