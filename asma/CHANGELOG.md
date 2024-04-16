@@ -1,5 +1,15 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.42] - Fix #68 - ArkAPI update, more config updates
+* Add Scorched Earth map
+* Add `exclusivejoin` option
+* Add `bDisablePhotoMode` option
+* Add `PhotoModeRangeLimit` option
+* Remove `AllowFlyerSpeedLeveling` option
+* Remove `insecure` option
+* Remove `UseVivox` option
+* Update ArkAPI (ServerAPI) url
+
 [0.3.41] - Add cluster and other options
 * `ClusterDirOverride` added
 * `clusterid` added
