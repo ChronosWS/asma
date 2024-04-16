@@ -59,7 +59,7 @@ pub fn get_changelog_url() -> String {
 }
 
 pub fn get_server_api_github_url() -> String {
-    "https://github.com/ArkServerApi/AsaApi/releases".into()
+    "https://api.github.com/repos/ArkServerApi/AsaApi/releases".into()
 }
 
 pub fn get_default_curseforge_app_id() -> String {
