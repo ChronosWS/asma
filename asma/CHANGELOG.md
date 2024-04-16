@@ -1,5 +1,8 @@
 # Ark Server Manager: Ascended Changelog
 
+[0.3.43] - Fix #70 - Fix ArkAPI url
+* Fix erroneous ArkAPI url
+
 [0.3.42] - Fix #68 - ArkAPI update, more config updates
 * Add Scorched Earth map
 * Add `exclusivejoin` option
