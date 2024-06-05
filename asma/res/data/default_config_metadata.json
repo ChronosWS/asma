@@ -12,6 +12,10 @@
                     "value": "ScorchedEarth_WP"
                 },
                 {
+                    "display_name": "The Center",
+                    "value": "TheCenter_WP"
+                },
+                {
                     "display_name": "(Mod) Svartalfheim",
                     "value": "Svartalfheim_WP"
                 }
