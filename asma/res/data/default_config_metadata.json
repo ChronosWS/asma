@@ -4107,7 +4107,7 @@
                             "name": "Multiplier",
                             "value_type": {
                                 "quantity": "Scalar",
-                                "base_type": "String"
+                                "base_type": "Float"
                             }
                         }
                     ]
@@ -4141,7 +4141,7 @@
                             "name": "Multiplier",
                             "value_type": {
                                 "quantity": "Scalar",
-                                "base_type": "String"
+                                "base_type": "Float"
                             }
                         }
                     ]
@@ -4686,7 +4686,7 @@
                             "name": "Multiplier",
                             "value_type": {
                                 "quantity": "Scalar",
-                                "base_type": "String"
+                                "base_type": "Float"
                             }
                         }
                     ]
